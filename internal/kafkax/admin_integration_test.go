@@ -84,3 +84,27 @@ func TestCommitOffsetsOnEmptyGroup(t *testing.T) {
 		t.Fatalf("deleting a missing group must not fail: %v", err)
 	}
 }
+
+func TestReadAllFromStart(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+	a := mustAdmin(t)
+	if err := a.RecreateTopics(ctx, LabTopics()); err != nil {
+		t.Fatal(err)
+	}
+	cl, err := NewProducer(DefaultProfile())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cl.Close()
+	recs := []Record{{Key: "a", Value: []byte("1")}, {Key: "b", Value: []byte("2")}, {Key: "c", Value: []byte("3")}}
+	for _, r := range ProduceSync(ctx, cl, recs) {
+		if r.Err != nil {
+			t.Fatal(r.Err)
+		}
+	}
+	got, err := ReadAll(ctx, Topic, 3)
+	if err != nil || len(got) != 3 {
+		t.Fatalf("%v %v", got, err)
+	}
+}

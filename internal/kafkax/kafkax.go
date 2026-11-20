@@ -142,3 +142,25 @@ func LabTopics() []TopicSpec {
 			"min.cleanable.dirty.ratio": s("0.01"), "delete.retention.ms": s("10000")}},
 	}
 }
+
+// ReadAll reads want records of topic from the beginning without a consumer group, so no offsets are committed.
+func ReadAll(ctx context.Context, topic string, want int64) ([]Record, error) {
+	cl, err := kgo.NewClient(kgo.SeedBrokers(Brokers...), kgo.ConsumeTopics(topic),
+		kgo.ConsumeResetOffset(kgo.NewOffset().AtStart()))
+	if err != nil {
+		return nil, err
+	}
+	defer cl.Close()
+	var out []Record
+	for int64(len(out)) < want {
+		fs := cl.PollFetches(ctx)
+		if err := ctx.Err(); err != nil {
+			return out, fmt.Errorf("read %d of %d records from %s: %w", len(out), want, topic, err)
+		}
+		if errs := fs.Errors(); len(errs) > 0 {
+			return out, errs[0].Err
+		}
+		fs.EachRecord(func(r *kgo.Record) { out = append(out, Record{Key: string(r.Key), Value: r.Value}) })
+	}
+	return out, nil
+}

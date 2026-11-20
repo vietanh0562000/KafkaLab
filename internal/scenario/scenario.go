@@ -4,6 +4,7 @@ package scenario
 import (
 	"context"
 	"fmt"
+	"slices"
 	"time"
 
 	"kafkalab/internal/lab"
@@ -89,5 +90,5 @@ func (s Scenario) Summary() Summary {
 
 // All lists every built scenario in learning order.
 func All() []Scenario {
-	return m0()
+	return slices.Concat(m0(), m3())
 }

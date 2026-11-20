@@ -24,7 +24,7 @@ func TestCatalogHasTeachingText(t *testing.T) {
 			}
 		}
 	}
-	for _, id := range []string{"0.1", "0.2"} {
+	for _, id := range []string{"0.1", "0.2", "3.1", "3.2", "3.3", "3.4"} {
 		if !seen[id] {
 			t.Fatalf("scenario %s missing", id)
 		}

@@ -288,3 +288,7 @@ After approval: copy this design to `kafka-lab/docs/design.md` and break milesto
 - The service image (eclipse-temurin:21-jre-alpine, same as production) cannot load snappy-java's native library
   (needs glibc `ld-linux-x86-64.so.2`). Snappy-compressed batches make the consumer throw a non-record
   KafkaException in a loop: polled stays 0, lag grows, the pipeline gauge stays RUNNING. Candidate for an M1 scenario.
+- 3.1: first PAUSED 18 s after `docker stop` of the DB (3 × 5 s connection-timeout + 2 × 1 s): HikariCP waits the
+  full connection-timeout even when connections are refused at once. Second PAUSED ~27 s later (10 s pause + retries).
+- 3.2: the poison partition's owner held 2 of 3 partitions; DB got 149/500 rows (only the other instance's partition).
+- 3.3: the DLQ received 161 records for one poison pill (the whole failed batch); replaying 160 restored 499 rows.

@@ -104,6 +104,7 @@ function reveal() {
 }
 
 async function runScenario() {
+  if (!current) return;
   const id = current.id;
   steps[id] = [];
   delete finished[id];
@@ -177,8 +178,10 @@ function renderLive(s) {
         `<td>${(i.partitions || []).join(",")}</td></tr>`;
     }).join("");
 
-  $("db-rows").textContent = fmt(s.dbRows);
-  $("late-rows").textContent = fmt(s.lateRows);
+  // While the DB is unreachable the counts are unknown, not zero.
+  const dbDown = Boolean((s.errors || {}).db);
+  $("db-rows").textContent = dbDown ? "?" : fmt(s.dbRows);
+  $("late-rows").textContent = dbDown ? "?" : fmt(s.lateRows);
   $("dlq-end").textContent = fmt(s.dlqEnd);
   renderControls(s.containers || {});
 }
@@ -218,9 +221,20 @@ async function produce(form) {
 
 // Wiring
 
+async function loadScenarios() {
+  try {
+    scenarios = await (await api("/api/scenarios")).json();
+  } catch (e) {
+    log(`không tải được danh sách kịch bản: ${e.message}`);
+  }
+  renderNav();
+  route();
+}
+
 function connect() {
   const es = new EventSource("/api/events");
-  es.onopen = () => { $("conn").textContent = "live"; $("conn").className = "pill s-RUNNING"; };
+  // A reconnect usually means lab-control restarted, possibly with new scenarios.
+  es.onopen = () => { $("conn").textContent = "live"; $("conn").className = "pill s-RUNNING"; loadScenarios(); };
   es.onerror = () => { $("conn").textContent = "mất kết nối, đang thử lại…"; $("conn").className = "pill s-PAUSED"; };
   es.addEventListener("snapshot", (e) => renderLive(JSON.parse(e.data).data));
   es.addEventListener("log", (e) => { const ev = JSON.parse(e.data); log(ev.data, ev.at); });
@@ -243,13 +257,6 @@ async function init() {
   };
   $("produce").onsubmit = (e) => { e.preventDefault(); produce(e.target); };
   window.onhashchange = route;
-  try {
-    scenarios = await (await api("/api/scenarios")).json();
-  } catch (e) {
-    log(`không tải được danh sách kịch bản: ${e.message}`);
-  }
-  renderNav();
-  route();
   connect();
   api("/api/snapshot").then((r) => r.json()).then(renderLive).catch(() => {});
 }
