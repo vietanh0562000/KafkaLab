@@ -8,7 +8,7 @@ BASE := controller kafka-1 kafka-2 kafka-3 kafka-ui timescaledb
 jar:
 	mkdir -p build
 	cd $(SERVICE_DIR) && JAVA_HOME=$(JDK21) sh ./mvnw -q -pl gap-streaming -am package -DskipTests || \
-	  docker run --rm -v $$HOME/.m2:/root/.m2 -v $(SERVICE_DIR):/src -w /src \
+	  docker run --rm --user $$(id -u):$$(id -g) -e MAVEN_CONFIG=/tmp/.m2 -v $$HOME/.m2:/tmp/.m2 -v $(SERVICE_DIR):/src -w /src \
 	    maven:3.9-eclipse-temurin-21 mvn -q -o -pl gap-streaming -am package -DskipTests
 	cp $$(ls $(SERVICE_DIR)/gap-streaming/target/gap-streaming-*.jar | grep -v plain | head -1) build/service.jar
 

@@ -69,7 +69,7 @@ func TestStopLabContainer(t *testing.T) {
 	if err := d.Stop(context.Background(), "lab-timescaledb"); err != nil {
 		t.Fatal(err)
 	}
-	if seen != "docker stop lab-timescaledb" {
+	if seen != "docker stop -- lab-timescaledb" {
 		t.Fatalf("got %q", seen)
 	}
 }
@@ -125,5 +125,16 @@ func TestIPsParsesNetworkInspect(t *testing.T) {
 	want := map[string]string{"172.20.0.7": "lab-gap-svc-1", "172.20.0.3": "lab-kafka-1"}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got %v", got)
+	}
+}
+
+func TestGuardInspectsContainersOnlyAndEndsFlags(t *testing.T) {
+	f := &fakeRunner{out: map[string]string{"inspect": "kafkalab\n"}}
+	d := &Docker{R: f, Project: "kafkalab"}
+	if err := d.Stop(context.Background(), "lab-kafka-1"); err != nil {
+		t.Fatal(err)
+	}
+	if !f.callContaining("inspect", "--type", "container", "--", "lab-kafka-1") || !f.callContaining("stop", "--", "lab-kafka-1") {
+		t.Fatalf("%v", f.calls)
 	}
 }

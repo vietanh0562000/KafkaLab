@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -108,7 +109,7 @@ func TestResetRestoresBrokenLab(t *testing.T) {
 		t.Fatal(err)
 	}
 	order := []string{
-		"docker unpause lab-kafka-2",
+		"docker unpause -- lab-kafka-2",
 		"compose up -d controller kafka-1 kafka-2 kafka-3 kafka-ui timescaledb",
 		"compose stop gap-svc-1 gap-svc-2 gap-svc-3 gap-svc-4",
 		"deleteGroup gap-lab",
@@ -177,5 +178,46 @@ func TestResetWaitsForGroupCoordinator(t *testing.T) {
 	}
 	if rec.index("deleteGroup gap-lab") < 0 {
 		t.Fatal(rec.log)
+	}
+}
+
+func TestProduceRejectsOutOfRange(t *testing.T) {
+	l, _, _ := newTestLab(t, "")
+	l.send = func(context.Context, kafkax.ProducerProfile, []kafkax.Record) ([]kafkax.Result, error) {
+		return nil, nil
+	}
+	for _, r := range []ProduceReq{
+		{Count: 2, RatePerSec: 2_000_000_000},
+		{Count: 2_000_000_000},
+		{Count: 10, Sensors: -1},
+		{Count: 10, PoisonEvery: -1},
+	} {
+		if _, err := l.Produce(context.Background(), r); err == nil {
+			t.Fatalf("want error for %+v", r)
+		}
+	}
+}
+
+func TestResetCancelsFreePlayProduce(t *testing.T) {
+	l, _, _ := newTestLab(t, "")
+	l.send = func(context.Context, kafkax.ProducerProfile, []kafkax.Record) ([]kafkax.Result, error) {
+		return []kafkax.Result{{}}, nil
+	}
+	done := make(chan error, 1)
+	go func() {
+		_, err := l.Produce(context.Background(), ProduceReq{Count: 1000, RatePerSec: 2})
+		done <- err
+	}()
+	time.Sleep(100 * time.Millisecond)
+	if err := l.Reset(context.Background(), ResetOpts{Instances: 1, Env: chaos.DefaultSvcEnv()}); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case err := <-done:
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("want context.Canceled, got %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("free-play produce kept running through reset")
 	}
 }

@@ -75,7 +75,7 @@ services:
     image: apache/kafka:3.9.0
     container_name: lab-kafka-1
     networks: [lab-kafka]
-    ports: ["19092:19092"]
+    ports: ["127.0.0.1:19092:19092"]
     depends_on: [controller]
     environment:
       <<: *broker-env
@@ -88,7 +88,7 @@ services:
     image: apache/kafka:3.9.0
     container_name: lab-kafka-2
     networks: [lab-kafka]
-    ports: ["19093:19093"]
+    ports: ["127.0.0.1:19093:19093"]
     depends_on: [controller]
     environment:
       <<: *broker-env
@@ -101,7 +101,7 @@ services:
     image: apache/kafka:3.9.0
     container_name: lab-kafka-3
     networks: [lab-kafka]
-    ports: ["19094:19094"]
+    ports: ["127.0.0.1:19094:19094"]
     depends_on: [controller]
     environment:
       <<: *broker-env
@@ -114,7 +114,7 @@ services:
     image: ghcr.io/kafbat/kafka-ui:v1.3.0
     container_name: lab-kafka-ui
     networks: [lab-kafka]
-    ports: ["18080:8080"]
+    ports: ["127.0.0.1:18080:8080"]
     depends_on: [kafka-1, kafka-2, kafka-3]
     environment:
       KAFKA_CLUSTERS_0_NAME: lab
@@ -125,7 +125,7 @@ services:
     image: timescale/timescaledb:2.27.0-pg16
     container_name: lab-timescaledb
     networks: [lab-db]
-    ports: ["15432:5432"]
+    ports: ["127.0.0.1:15432:5432"]
     shm_size: 512m
     volumes:
       - ./db/init/10-catalog-tables.sql:/docker-entrypoint-initdb.d/010_catalog_tables.sql:ro
@@ -135,27 +135,27 @@ services:
   gap-svc-1:
     <<: *gap-svc
     container_name: lab-gap-svc-1
-    ports: ["18181:8181"]
+    ports: ["127.0.0.1:18181:8181"]
     environment: { <<: *gap-svc-env, HOSTNAME: gap-svc-1 }
 
   gap-svc-2:
     <<: *gap-svc
     container_name: lab-gap-svc-2
-    ports: ["18182:8181"]
+    ports: ["127.0.0.1:18182:8181"]
     environment: { <<: *gap-svc-env, HOSTNAME: gap-svc-2 }
 
   gap-svc-3:
     <<: *gap-svc
     container_name: lab-gap-svc-3
     profiles: [scale]
-    ports: ["18183:8181"]
+    ports: ["127.0.0.1:18183:8181"]
     environment: { <<: *gap-svc-env, HOSTNAME: gap-svc-3 }
 
   gap-svc-4:
     <<: *gap-svc
     container_name: lab-gap-svc-4
     profiles: [scale]
-    ports: ["18184:8181"]
+    ports: ["127.0.0.1:18184:8181"]
     environment: { <<: *gap-svc-env, HOSTNAME: gap-svc-4 }
 
 networks:

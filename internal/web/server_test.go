@@ -149,3 +149,19 @@ func TestStaticNotCached(t *testing.T) {
 		t.Fatalf("Cache-Control %q", got)
 	}
 }
+
+func TestPostRequiresJSONContentType(t *testing.T) {
+	s := serve(&fakeBackend{}, events.NewHub())
+	defer s.Close()
+	// A page on another origin can send text/plain without a CORS preflight; it must not reach chaos or reset.
+	for _, path := range []string{"/api/chaos", "/api/reset", "/api/produce", "/api/scenarios/0.1/run"} {
+		resp, err := http.Post(s.URL+path, "text/plain", strings.NewReader(`{"action":"stop","target":"lab-kafka-1"}`))
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusUnsupportedMediaType {
+			t.Fatalf("%s: %d", path, resp.StatusCode)
+		}
+	}
+}

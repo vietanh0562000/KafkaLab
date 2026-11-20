@@ -59,7 +59,8 @@ func (b backend) Produce(ctx context.Context, r lab.ProduceReq) error {
 }
 
 func main() {
-	addr := flag.String("addr", ":7070", "listen address")
+	// Loopback only: the API stops containers and has no auth.
+	addr := flag.String("addr", "127.0.0.1:7070", "listen address")
 	dir := flag.String("dir", ".", "directory holding compose.yaml")
 	run := flag.String("run", "", "run one scenario headless and exit (0 = pass)")
 	flag.Parse()
@@ -103,7 +104,7 @@ func main() {
 			log.Fatal(err)
 		}
 	}()
-	log.Printf("Kafka Lab on http://localhost%s", *addr)
+	log.Printf("Kafka Lab on http://%s", *addr)
 	<-ctx.Done()
 	shutdown, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()

@@ -54,9 +54,11 @@ vì hash chia theo key, không chia đều theo record.</p>
 <p><b>Committed offset</b> là offset tiếp theo group sẽ đọc. <b>Lag = end − committed</b>: số record đã nằm trên broker mà group
 chưa xác nhận xử lý xong.</p>
 <p>Service chỉ commit <i>sau khi</i> ghi DB xong: listener chạy <code>AckMode.MANUAL</code> (<code>KafkaConfiguration.java</code>),
-và <code>ack.acknowledge()</code> chỉ được gọi khi handler trả về thành công (<code>FilteredKafkaDataSource.java</code>).
-Đó là <i>at-least-once</i>: chết giữa chừng thì batch được đọc lại chứ không mất; bản trùng bị DB bỏ qua nhờ khoá chính
-<code>(permanent_id, start_time)</code>.</p>
+và <code>ack.acknowledge()</code> chỉ được gọi sau khi sink ghi xong batch (<code>IngestionPipeline.java</code>).
+Đó là <i>at-least-once</i>: chết giữa chừng thì batch được đọc lại chứ không mất.</p>
+<p>Bản trùng khi đọc lại làm lệnh COPY hỏng với SQLState <code>23505</code> (trùng khoá chính <code>(permanent_id, start_time)</code>).
+DAO bắt đúng mã này và ghi lại batch bằng <code>INSERT … ON CONFLICT DO NOTHING</code> (<code>AbstractBulkInsertDao</code>), nên trùng lặp
+không làm kẹt pipeline, dù các lỗi <code>23xxx</code> khác bị coi là non-retryable (xem 3.2).</p>
 <p>Bảng Live còn hiện group thứ hai, <code>gap-lab-tracking</code>, đọc cùng topic với offset riêng. Nhiều group nghĩa là nhiều
 "con trỏ đọc" độc lập trên cùng một log; Kafka không xoá record khi có người đọc.</p>`,
 		JavaProps: []string{"enable.auto.commit=false", "spring.kafka.listener.ack-mode=manual", "max.poll.records=500",
@@ -95,22 +97,24 @@ func lagAndThroughput() Scenario {
 				return len(lat) == 10 && p90 >= 200 && mx <= 2000, fmt.Sprintf("p50 %d ms, p90 %d ms, max %d ms", percentile(lat, 0.5), p90, mx)
 			}),
 		},
-		Reveal: `<p>Lúc burst, producer ghi nhanh hơn service ghi DB, nên lag vọt lên rồi giảm dần. Tốc độ giảm là tốc độ ghi DB
-(COPY theo batch tối đa 500 record), không phải tốc độ của Kafka: Kafka chỉ là hàng đợi bền giữa hai bên.</p>
+		Reveal: `<p>Lúc burst, producer ghi nhanh hơn service xử lý, nên lag vọt lên rồi giảm dần. Tốc độ giảm là tốc độ của service: mỗi instance chỉ có
+1 consumer thread (<code>concurrency=1</code>) vừa parse vừa COPY xuống DB theo batch tối đa 500 record. Kafka chỉ là hàng đợi bền giữa hai bên.
+Lab chưa đo xem phần nào trong service (thread hay DB) là nút thắt.</p>
 <p>Lúc nhỏ giọt, service cấu hình <code>fetch.min.bytes=5242880</code> (5 MB) và <code>fetch.max.wait.ms=500</code>. Broker giữ mỗi
 fetch request lại cho tới khi đủ 5 MB <i>hoặc</i> hết 500 ms. 1 record/giây không bao giờ đủ 5 MB, nên mỗi record phải chờ fetch đang
 mở hết hạn, tức 0–500 ms (trung bình khoảng 250 ms), trước khi service nhìn thấy nó.</p>
 <p>Lab gửi lệch nhịp ngẫu nhiên vì một lý do đo được: nếu gửi đều đúng 1 record/giây, pha của nhịp gửi khớp với chu kỳ fetch 500 ms
 và độ trễ gần như cố định ở một giá trị (đo được 159 ms lặp lại). Một con số đẹp và ổn định như vậy dễ bị đọc nhầm thành "độ trễ của Kafka".</p>
-<p>Một điều nữa lab đã đo: nếu topic đặt <code>segment.ms</code> rất ngắn (10 s), broker trả fetch gần như ngay lập tức (~20 ms) và
-<code>fetch.min.bytes</code> mất tác dụng. Cấu hình của topic cũng ảnh hưởng tới độ trễ phía consumer, không chỉ cấu hình của consumer.</p>
+<p>Lab còn ghi nhận một hiện tượng: với một topic đặt <code>segment.ms</code> rất ngắn (10 s), consumer cùng cấu hình nhận record sau
+khoảng 20 ms thay vì chờ tới <code>fetch.max.wait</code>. Lab mới đo một lần và chưa xác định cơ chế bên trong broker; chỉ biết rằng cấu hình
+của topic cũng có thể làm thay đổi độ trễ phía consumer.</p>
 <p>Đây là đánh đổi có chủ đích: batch to giúp COPY nhanh (throughput), đổi lại độ trễ khi traffic thấp. Với dữ liệu theo phút (PT1M),
 nửa giây không đáng kể; với hệ thống cần phản ứng tức thì thì có.</p>`,
 		JavaProps: []string{"fetch.min.bytes=5242880", "fetch.max.wait.ms=500", "max.poll.records=500", "max.partition.fetch.bytes=10485760"},
 		CLI:       []string{cliDescribeGroup + "   # chạy lặp lại trong lúc burst để thấy LAG giảm dần"},
 		Confirm: []string{
 			"Nếu hạ fetch.min.bytes xuống 1 thì độ trễ và số lần fetch thay đổi thế nào?",
-			"Thêm instance thứ 3 có làm burst xong nhanh hơn không, khi DB mới là nút thắt?",
+			"Thêm instance thứ 3 có làm burst xong nhanh hơn không? Bạn cần đo gì để biết nút thắt nằm ở consumer thread hay ở DB?",
 			"Lag 50.000 có đáng lo không? Bạn cần biết thêm con số nào để trả lời?",
 		},
 	}

@@ -65,7 +65,9 @@ func (d *Docker) run(ctx context.Context, args ...string) (string, error) {
 }
 
 func (d *Docker) guard(ctx context.Context, container string) error {
-	out, err := d.R.Run(ctx, "docker", "inspect", "-f", `{{index .Config.Labels "com.docker.compose.project"}}`, container)
+	// --type container stops a same-named image or volume from answering; -- stops a name that looks like a flag.
+	out, err := d.R.Run(ctx, "docker", "inspect", "--type", "container", "-f",
+		`{{index .Config.Labels "com.docker.compose.project"}}`, "--", container)
 	if err != nil {
 		return fmt.Errorf("%w: %s (%v)", ErrNotLab, container, err)
 	}
@@ -79,7 +81,7 @@ func (d *Docker) container(ctx context.Context, verb, container string) error {
 	if err := d.guard(ctx, container); err != nil {
 		return err
 	}
-	_, err := d.run(ctx, verb, container)
+	_, err := d.run(ctx, verb, "--", container)
 	return err
 }
 
@@ -93,7 +95,7 @@ func (d *Docker) Disconnect(ctx context.Context, network, c string) error {
 	if err := d.guard(ctx, c); err != nil {
 		return err
 	}
-	_, err := d.run(ctx, "network", "disconnect", network, c)
+	_, err := d.run(ctx, "network", "disconnect", "--", network, c)
 	return err
 }
 
@@ -101,7 +103,7 @@ func (d *Docker) Connect(ctx context.Context, network, c string) error {
 	if err := d.guard(ctx, c); err != nil {
 		return err
 	}
-	_, err := d.run(ctx, "network", "connect", network, c)
+	_, err := d.run(ctx, "network", "connect", "--", network, c)
 	return err
 }
 

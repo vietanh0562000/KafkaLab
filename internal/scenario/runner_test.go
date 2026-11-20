@@ -122,3 +122,11 @@ func TestUnknownScenario(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestPanickingStepFailsScenario(t *testing.T) {
+	sc := Scenario{ID: "a", Steps: []Step{Action("boom", func(context.Context, *Ctx) error { panic("nil map") })}}
+	res, err := newRunner(noReset, emptySnap, func(events.Event) {}, []Scenario{sc}).RunSync(context.Background(), "a")
+	if err != nil || res.Passed || !strings.Contains(res.Steps[1].Err, "nil map") {
+		t.Fatalf("%+v %v", res, err)
+	}
+}

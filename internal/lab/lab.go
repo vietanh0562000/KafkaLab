@@ -45,10 +45,15 @@ type Lab struct {
 	mu       sync.Mutex
 	timeline *payload.Timeline
 	group    string
+
+	freeMu      sync.Mutex
+	freeCancels map[int]context.CancelFunc
+	freeNext    int
 }
 
 func New(d *chaos.Docker, a Admin, db DB, hub *events.Hub) *Lab {
-	l := &Lab{Docker: d, Admin: a, DB: db, Hub: hub, send: sendWithProfile, now: time.Now, group: kafkax.Group}
+	l := &Lab{Docker: d, Admin: a, DB: db, Hub: hub, send: sendWithProfile, now: time.Now, group: kafkax.Group,
+		freeCancels: map[int]context.CancelFunc{}}
 	l.timeline = payload.NewTimeline(payload.TodayBerlinUTC(l.now()))
 	l.Snap = func() observe.Snapshot { return observe.Snapshot{} }
 	return l
@@ -106,11 +111,58 @@ type ProduceReq struct {
 	Idempotent  bool   `json:"idempotent"`
 }
 
+// Limits keep one request from exhausting memory or making a zero ticker interval.
+const (
+	maxProduceCount = 1_000_000
+	maxProduceRate  = 10_000
+	maxSensors      = 100_000
+)
+
+func (r ProduceReq) validate() error {
+	switch {
+	case r.Count < 1 || r.Count > maxProduceCount:
+		return fmt.Errorf("count must be 1..%d", maxProduceCount)
+	case r.RatePerSec < 0 || r.RatePerSec > maxProduceRate:
+		return fmt.Errorf("ratePerSec must be 0..%d", maxProduceRate)
+	case r.Sensors < 0 || r.Sensors > maxSensors:
+		return fmt.Errorf("sensors must be 0..%d", maxSensors)
+	case r.PoisonEvery < 0:
+		return fmt.Errorf("poisonEvery must be >= 0")
+	}
+	return nil
+}
+
+// trackFreePlay makes a free-play produce cancellable by Reset, so it cannot leak into the next baseline.
+func (l *Lab) trackFreePlay(ctx context.Context) (context.Context, func()) {
+	ctx, cancel := context.WithCancel(ctx)
+	l.freeMu.Lock()
+	id := l.freeNext
+	l.freeNext++
+	l.freeCancels[id] = cancel
+	l.freeMu.Unlock()
+	return ctx, func() {
+		l.freeMu.Lock()
+		delete(l.freeCancels, id)
+		l.freeMu.Unlock()
+		cancel()
+	}
+}
+
+func (l *Lab) cancelFreePlay() {
+	l.freeMu.Lock()
+	defer l.freeMu.Unlock()
+	for _, cancel := range l.freeCancels {
+		cancel()
+	}
+}
+
 // Produce is free play: Count records over Sensors keys, every PoisonEvery-th one a poison pill.
 func (l *Lab) Produce(ctx context.Context, r ProduceReq) ([]kafkax.Result, error) {
-	if r.Count <= 0 {
-		return nil, fmt.Errorf("count must be > 0")
+	if err := r.validate(); err != nil {
+		return nil, err
 	}
+	ctx, done := l.trackFreePlay(ctx)
+	defer done()
 	if r.Acks == "" {
 		r.Acks = "all"
 	}

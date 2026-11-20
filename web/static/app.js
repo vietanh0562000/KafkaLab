@@ -6,6 +6,7 @@ const MODULES = [
 ];
 
 const $ = (id) => document.getElementById(id);
+const JSON_HEADERS = { "Content-Type": "application/json" };
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const short = (name) => String(name || "").replace(/^lab-gap-/, "").replace(/^lab-/, "");
 const fmt = (n) => (n === undefined || n === null ? "–" : Number(n).toLocaleString("en-US"));
@@ -111,7 +112,7 @@ async function runScenario() {
   renderSteps();
   renderRunState();
   try {
-    await api(`/api/scenarios/${encodeURIComponent(id)}/run`, { method: "POST" });
+    await api(`/api/scenarios/${encodeURIComponent(id)}/run`, { method: "POST", headers: JSON_HEADERS });
     $("sc-status").textContent = "Đang chạy…";
   } catch (e) {
     $("sc-status").textContent = e.message.startsWith("409") ? "Đang có kịch bản hoặc reset khác chạy." : e.message;
@@ -248,7 +249,7 @@ async function init() {
   $("sc-skip").onclick = (e) => { e.preventDefault(); reveal(); };
   $("sc-guess").oninput = (e) => current && store("guess-" + current.id, e.target.value);
   $("reset-btn").onclick = async () => {
-    try { await api("/api/reset", { method: "POST" }); log("reset bắt đầu…"); }
+    try { await api("/api/reset", { method: "POST", headers: JSON_HEADERS }); log("reset bắt đầu…"); }
     catch (e) { log(e.message.startsWith("409") ? "đang có kịch bản chạy, chưa reset được" : e.message); }
   };
   $("containers-ctl").onclick = (e) => {

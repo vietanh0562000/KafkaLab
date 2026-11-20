@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"mime"
 	"net/http"
 	"time"
 
@@ -62,7 +63,22 @@ func NewServer(b Backend, hub *events.Hub, static fs.FS) http.Handler {
 		defer cancel()
 		respond(w, b.Chaos(ctx, req.Action, req.Target), http.StatusOK)
 	})
-	return mux
+	return requireJSON(mux)
+}
+
+// requireJSON rejects POSTs that are not application/json: a page on another origin can send text/plain
+// without a CORS preflight, and these endpoints stop containers.
+func requireJSON(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost {
+			mt, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
+			if err != nil || mt != "application/json" {
+				http.Error(w, "Content-Type must be application/json", http.StatusUnsupportedMediaType)
+				return
+			}
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 func respond(w http.ResponseWriter, err error, okStatus int) {

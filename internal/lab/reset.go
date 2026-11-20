@@ -55,6 +55,7 @@ func (l *Lab) Reset(ctx context.Context, o ResetOpts) error {
 	if o.Env.GroupID == "" {
 		o.Env.GroupID = kafkax.Group
 	}
+	l.cancelFreePlay()
 	states, err := l.Docker.States(ctx)
 	if err != nil {
 		return err

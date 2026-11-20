@@ -30,3 +30,22 @@ func TestCatalogHasTeachingText(t *testing.T) {
 		}
 	}
 }
+
+// Claims a review found false against the service code; they must not come back.
+func TestRevealsAvoidKnownFalseClaims(t *testing.T) {
+	banned := []string{
+		"COPY không cho biết",                  // the DAO does identify the offending row (identifyOffendingRecords)
+		"không cho biết dòng nào",              // same claim, other wording
+		"bị từ chối ngay",                      // a stopped container fails DNS (unknown host), not a refused connection
+		"FilteredKafkaDataSource.java</code>)", // the success ack lives in IngestionPipeline
+		"khi DB mới là nút thắt",               // never measured
+	}
+	for _, s := range All() {
+		text := s.Reveal + strings.Join(s.Confirm, " ")
+		for _, b := range banned {
+			if strings.Contains(text, b) {
+				t.Errorf("%s still says %q", s.ID, b)
+			}
+		}
+	}
+}

@@ -3,6 +3,7 @@ package scenario
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"time"
 
@@ -144,6 +145,16 @@ func (r *Runner) Reset() error {
 	return nil
 }
 
+// do turns a panicking step into a failed one; a crash would leave the injected fault in place with no UI.
+func do(ctx context.Context, st Step, c *Ctx) (observed string, err error) {
+	defer func() {
+		if p := recover(); p != nil {
+			err = fmt.Errorf("step panicked: %v", p)
+		}
+	}()
+	return st.Do(ctx, c)
+}
+
 func (r *Runner) run(ctx context.Context, sc Scenario) Result {
 	c := &Ctx{Lab: r.lab, Snapshot: r.snap, Vars: map[string]any{}}
 	baseline := Step{Name: "Baseline", Do: func(ctx context.Context, _ *Ctx) (string, error) {
@@ -153,7 +164,7 @@ func (r *Runner) run(ctx context.Context, sc Scenario) Result {
 	for _, st := range append([]Step{baseline}, sc.Steps...) {
 		r.emit(events.Event{Type: "step", Data: StepEvent{Scenario: sc.ID, Step: st.Name, Status: "running"}})
 		start := time.Now()
-		observed, err := st.Do(ctx, c)
+		observed, err := do(ctx, st, c)
 		sr := StepResult{Name: st.Name, Passed: err == nil, Observed: observed, Took: time.Since(start)}
 		ev := StepEvent{Scenario: sc.ID, Step: st.Name, Status: "pass", Observed: observed}
 		if err != nil {

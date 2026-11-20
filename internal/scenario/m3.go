@@ -98,10 +98,13 @@ thành công. Service thử lại batch 2 lần ngay trên listener thread, các
 <b>lab 10 → 20 → 40 → 60 s</b>, <b>prod 30 → 60 → 120 → 240 → 300 s</b>. Lag tăng dần trong lúc DB chết, vì producer vẫn ghi
 vào Kafka. Đó chính là việc của Kafka: làm vùng đệm giữa bên ghi và bên đọc.</p>
 <p>Thời gian tới lần PAUSED đầu ≈ 3 lần thử × <code>connection-timeout</code> + 2 × 1 s backoff: lab đo được khoảng 18 s
-(3 × 5 s + 2 s), prod sẽ khoảng 92 s (3 × 30 s + 2 s). Dù container DB đã dừng hẳn và kết nối bị từ chối ngay, HikariCP vẫn chờ
-hết connection-timeout mới báo lỗi: pool tiếp tục thử tạo kết nối mới trong suốt khoảng đó.</p>
-<p>Có một ràng buộc ngầm: max-retries × backoff phải nhỏ hơn <code>max.poll.interval.ms</code> (300 s). Nếu thử lại trên listener
-thread quá lâu, broker coi consumer đã chết và rebalance, chồng thêm một sự cố lên sự cố ban đầu. Service kiểm tra điều này lúc khởi động.</p>`,
+(3 × 5 s + 2 s), prod sẽ khoảng 92 s (3 × 30 s + 2 s). Container DB dừng hẳn thì tên <code>timescaledb</code> biến khỏi DNS của Docker,
+nên mỗi lần tạo kết nối đều hỏng ngay (unknown host); dù vậy HikariCP vẫn chờ hết connection-timeout mới báo lỗi, vì pool tiếp tục thử
+tạo kết nối mới trong suốt khoảng đó.</p>
+<p>Có một ràng buộc ngầm: toàn bộ thời gian thử lại trên listener thread phải nhỏ hơn <code>max.poll.interval.ms</code> (300 s). Nếu
+vượt quá, broker coi consumer đã chết và rebalance, chồng thêm một sự cố lên sự cố ban đầu. Thời gian đó ≈ (retries + 1) × thời gian một lần
+thử + retries × backoff. Lúc khởi động, service chỉ kiểm tra phần retries × backoff (<code>PipelineWiring.java</code>) và bỏ qua thời gian
+mỗi lần thử: ở prod với <code>max-retries=9</code>, phép kiểm tra thấy 9 s và cho qua, trong khi thực tế mất khoảng 10 × 30 s + 9 s ≈ 309 s.</p>`,
 		JavaProps: []string{"max.poll.interval.ms=300000", "pipelines.error-handling.batch-retry.max-retries=2",
 			"pipelines.error-handling.batch-retry.backoff-ms=1000", "pipelines.error-handling.pause-duration-ms=10000 (prod 30000)",
 			"pipelines.error-handling.max-pause-duration-ms=60000 (prod 300000)"},
@@ -199,7 +202,9 @@ func poisonPill() Scenario {
 		Reveal: `<p>JSON hợp lệ nên record vượt qua filter và parser. Nó chỉ hỏng ở bước ghi DB: <code>permanent_id varchar(255)</code>
 từ chối với SQLState <code>22001</code>. Service xếp mọi SQLState <code>22xxx</code> (data exception) vào loại <b>non-retryable</b>:
 thử lại cũng không bao giờ thành công.</p>
-<p>Lỗi xảy ra ở mức <b>batch</b>, vì service ghi cả batch bằng một lệnh COPY và COPY không cho biết dòng nào hỏng. Không có DLQ
+<p>Lỗi xảy ra ở mức <b>batch</b>: cả batch được ghi bằng một lệnh COPY. Service có tìm ra dòng hỏng
+(<code>AbstractBulkInsertDao.identifyOffendingRecords</code> thử lại từng record mà không ghi gì, rồi log record gây lỗi), nhưng kết quả đó
+chỉ để ghi log: error handler làm việc trên cả batch, nên cả batch bị giữ lại. Không có DLQ
 (<code>pipelines.error-handling.dlq.enabled=false</code> là mặc định), nên service làm điều duy nhất còn lại để không mất data:
 seek về đầu batch, không commit, pause, rồi resume, đọc lại đúng batch đó, hỏng lại, pause lâu hơn… mãi mãi.</p>
 <p>Phạm vi ảnh hưởng là <b>mọi partition của consumer đó</b>, không chỉ một record hay một partition: container bị pause dừng
@@ -211,7 +216,7 @@ giúp gì: offset chưa commit, nên pod mới đọc lại đúng batch đó.</
 		CLI: []string{cliDescribeGroup + "   # CURRENT-OFFSET của partition đó đứng yên, LAG tăng"},
 		Confirm: []string{
 			"Instance kia vẫn chạy. Vậy những sensor nào bị kẹt, những sensor nào không?",
-			"Restart pod có gỡ kẹt được không? Vì sao?",
+			"Pause tối đa 60 s (prod 300 s) rồi thử lại: một poison pill tốn bao nhiêu lần COPY thất bại mỗi giờ, và log sẽ trông thế nào?",
 			"Không bật DLQ, bạn sẽ gỡ kẹt bằng tay thế nào? Lệnh nào, và cái giá phải trả là gì?",
 		},
 	}
@@ -237,8 +242,9 @@ func dlq() Scenario {
 				return lagSum(s) == 0 && s.DBRows == 499
 			}),
 		},
-		Reveal: `<p><code>DlqPublisher</code> chuyển <b>cả batch</b> bị lỗi sang <code>dlq-&lt;topic&gt;</code>, kể cả các record tốt,
-vì lệnh COPY hỏng không cho biết dòng nào gây lỗi. Sau khi DLQ xác nhận đã ghi, offset được commit và pipeline chạy tiếp.</p>
+		Reveal: `<p><code>DlqPublisher</code> chuyển <b>cả batch</b> bị lỗi sang <code>dlq-&lt;topic&gt;</code>, kể cả các record tốt. Không phải vì
+không tìm được dòng hỏng (service có log nó, xem 3.2), mà vì error handler và <code>DlqRouter</code> được thiết kế làm việc trên cả batch: đơn
+giản hơn, đổi lại record tốt bị kéo theo. Sau khi DLQ xác nhận đã ghi, offset được commit và pipeline chạy tiếp.</p>
 <p>Mỗi record trong DLQ giữ nguyên key, payload và header gốc, thêm <code>x-original-partition</code> /
 <code>x-original-offset</code>, nên có thể replay có chọn lọc: bỏ poison, gửi lại phần còn lại.</p>
 <p>Chỉ batch hỏng vì <b>dữ liệu</b> (non-retryable) mới vào DLQ. Batch hỏng vì <b>DB chết</b> (retry hết lượt) không bị chuyển,
