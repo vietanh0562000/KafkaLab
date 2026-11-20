@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Kafka Lab</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+  <h1>Kafka Lab</h1>
+  <span id="conn" class="pill">đang kết nối…</span>
+  <span class="spacer"></span>
+  <button id="reset-btn" title="Đưa lab về trạng thái chuẩn: 3 broker, DB, 2 instance, topic trống">Reset baseline</button>
+</header>
+<main>
+  <nav id="nav"></nav>
+
+  <section id="center">
+    <div id="view-scenario" hidden>
+      <h2 id="sc-title"></h2>
+      <div class="box predict">
+        <h3>Dự đoán trước khi chạy</h3>
+        <p id="sc-question"></p>
+        <textarea id="sc-guess" rows="3" placeholder="Ghi dự đoán của bạn (chỉ lưu trên máy này)…"></textarea>
+      </div>
+      <div class="row">
+        <button id="sc-run" class="primary">Chạy kịch bản</button>
+        <span id="sc-status" class="muted"></span>
+      </div>
+      <ol id="sc-steps" class="steps"></ol>
+      <div class="row">
+        <button id="sc-reveal" disabled>Xem giải thích</button>
+        <a href="#" id="sc-skip" class="muted small">bỏ qua, xem luôn</a>
+      </div>
+      <div id="sc-answer" hidden>
+        <div class="box reveal" id="sc-reveal-body"></div>
+        <h3>Java properties liên quan</h3>
+        <pre id="sc-props"></pre>
+        <h3>Lệnh CLI tương đương (dùng ở prod)</h3>
+        <pre id="sc-cli"></pre>
+        <h3>Tự kiểm tra (không có đáp án)</h3>
+        <ol id="sc-confirm"></ol>
+      </div>
+    </div>
+
+    <div id="view-free" hidden>
+      <h2>Free play</h2>
+      <form id="produce" class="box">
+        <h3>Produce</h3>
+        <div class="grid-form">
+          <label>Số record <input name="count" type="number" value="1000" min="1"></label>
+          <label>Số sensor (key) <input name="sensors" type="number" value="100" min="1"></label>
+          <label>Rate/s (0 = burst) <input name="ratePerSec" type="number" value="0" min="0"></label>
+          <label>acks <select name="acks"><option>all</option><option>1</option><option>0</option></select></label>
+          <label class="check"><input name="idempotent" type="checkbox" checked> enable.idempotence</label>
+          <label>Poison mỗi N record (0 = không) <input name="poisonEvery" type="number" value="0" min="0"></label>
+        </div>
+        <button class="primary">Gửi</button>
+        <p class="muted small">idempotence=true bắt buộc acks=all, giống Java client.</p>
+      </form>
+      <div class="box">
+        <h3>Container</h3>
+        <table id="containers-ctl"></table>
+      </div>
+    </div>
+
+    <div id="view-gaps" hidden>
+      <h2>Chưa cover (khoảng 20% còn lại)</h2>
+      <ul>
+        <li>Bảo mật: SASL, SSL, ACL</li>
+        <li>Schema Registry, Avro, Protobuf</li>
+        <li>Kafka Connect, Kafka Streams, MirrorMaker</li>
+        <li>Consumer protocol mới (KIP-848), tiered storage, multi-DC</li>
+      </ul>
+      <p class="muted">Lab chỉ chạy local, một người dùng, không có auth.</p>
+    </div>
+  </section>
+
+  <aside id="live">
+    <h2>Live</h2>
+    <div id="errors"></div>
+    <div id="containers" class="chips"></div>
+    <h3>Topic <code>lab.short-term</code> · group <code id="group-name"></code> <span id="group-state" class="pill"></span></h3>
+    <table id="partitions"></table>
+    <p class="small muted" id="tracking"></p>
+    <h3>Service instances</h3>
+    <table id="instances"></table>
+    <div class="stats">
+      <div><span id="db-rows">–</span><label>DB rows</label></div>
+      <div><span id="late-rows">–</span><label>late rows</label></div>
+      <div><span id="dlq-end">–</span><label>DLQ records</label></div>
+    </div>
+    <h3>Event log</h3>
+    <ol id="log" class="log"></ol>
+  </aside>
+</main>
+<script src="app.js"></script>
+</body>
+</html>
