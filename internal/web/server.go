@@ -28,7 +28,11 @@ type Backend interface {
 
 func NewServer(b Backend, hub *events.Hub, static fs.FS) http.Handler {
 	mux := http.NewServeMux()
-	mux.Handle("GET /", http.FileServerFS(static))
+	files := http.FileServerFS(static)
+	mux.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-cache")
+		files.ServeHTTP(w, r)
+	})
 	mux.HandleFunc("GET /api/events", func(w http.ResponseWriter, r *http.Request) { stream(w, r, hub) })
 	mux.HandleFunc("GET /api/snapshot", func(w http.ResponseWriter, r *http.Request) { writeJSON(w, b.Snapshot()) })
 	mux.HandleFunc("GET /api/scenarios", func(w http.ResponseWriter, r *http.Request) { writeJSON(w, b.Summaries()) })

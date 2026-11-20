@@ -135,3 +135,17 @@ func TestSnapshotEndpoint(t *testing.T) {
 		t.Fatal(string(buf[:n]))
 	}
 }
+
+func TestStaticNotCached(t *testing.T) {
+	s := serve(&fakeBackend{}, events.NewHub())
+	defer s.Close()
+	resp, err := http.Get(s.URL + "/")
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	// The page is embedded in the binary; after a rebuild the browser must not keep the old one.
+	if got := resp.Header.Get("Cache-Control"); got != "no-cache" {
+		t.Fatalf("Cache-Control %q", got)
+	}
+}

@@ -89,7 +89,11 @@ func (l *Lab) Reset(ctx context.Context, o ResetOpts) error {
 
 	old := l.Group()
 	for _, g := range []string{old, old + "-tracking", o.Env.GroupID, o.Env.GroupID + "-tracking"} {
-		if err := l.Admin.DeleteGroup(ctx, g); err != nil {
+		// A fresh cluster answers COORDINATOR_NOT_AVAILABLE until __consumer_offsets exists.
+		if err := waitFor(ctx, 60*time.Second, "deleting group "+g, func(c context.Context) (bool, error) {
+			err := l.Admin.DeleteGroup(c, g)
+			return err == nil, err
+		}); err != nil {
 			return err
 		}
 	}
@@ -102,7 +106,10 @@ func (l *Lab) Reset(ctx context.Context, o ResetOpts) error {
 	if o.Env.GroupID == kafkax.Group {
 		zero := map[int32]int64{0: 0, 1: 0, 2: 0}
 		for _, g := range []string{kafkax.Group, kafkax.TrackingGroup} {
-			if err := l.Admin.CommitOffsets(ctx, g, kafkax.Topic, zero); err != nil {
+			if err := waitFor(ctx, 60*time.Second, "committing offset 0 for "+g, func(c context.Context) (bool, error) {
+				err := l.Admin.CommitOffsets(c, g, kafkax.Topic, zero)
+				return err == nil, err
+			}); err != nil {
 				return err
 			}
 		}

@@ -164,12 +164,14 @@ function renderLive(s) {
   const tlag = (t.lags || []).reduce((a, l) => a + (l.lag || 0), 0);
   $("tracking").textContent = t.name ? `Group thứ hai trên cùng topic: ${t.name} · ${t.state || "?"} · lag ${fmt(tlag)}` : "";
 
-  $("instances").innerHTML = `<tr><th>Instance</th><th>Container</th><th>Pipeline</th><th class="num">Polled</th><th class="num">To processor</th><th class="num">Dropped</th><th class="num">Failed</th><th>P</th></tr>` +
+  $("instances").innerHTML = `<tr><th>Instance</th><th>State</th><th class="num">Polled</th><th class="num" title="records_accepted_total: handed to the processor">To proc.</th><th class="num" title="dropped by the interval filter">Drop</th><th class="num">Failed</th><th>P</th></tr>` +
     (s.instances || []).map((i) => {
       const failed = Object.entries(i.failed || {});
       const failedSum = failed.reduce((a, [, v]) => a + v, 0);
-      return `<tr><td>${esc(short(i.name))}</td><td class="st-${esc(i.container)}">${esc(i.container)}</td>` +
-        `<td class="s-${esc(i.state)}">${esc(i.state || "—")}</td><td class="num">${fmt(i.polled)}</td>` +
+      // A stopped or paused container has no pipeline state; show the container state instead.
+      const state = i.container === "running" ? `<td class="s-${esc(i.state)}">${esc(i.state || "—")}</td>`
+        : `<td class="st-${esc(i.container)}">container ${esc(i.container)}</td>`;
+      return `<tr><td>${esc(short(i.name))}</td>${state}<td class="num">${fmt(i.polled)}</td>` +
         `<td class="num">${fmt(i.accepted)}</td><td class="num">${fmt(i.filteredDrop)}</td>` +
         `<td class="num" title="${esc(failed.map(([k, v]) => `${k}: ${v}`).join("\n"))}">${fmt(failedSum)}</td>` +
         `<td>${(i.partitions || []).join(",")}</td></tr>`;

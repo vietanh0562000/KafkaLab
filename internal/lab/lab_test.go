@@ -2,6 +2,7 @@ package lab
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -51,10 +52,17 @@ func (f *fakeRunner) Run(_ context.Context, _ string, args ...string) (string, e
 	return "", nil
 }
 
-type fakeAdmin struct{ rec *recorder }
+type fakeAdmin struct {
+	rec            *recorder
+	coordinatorErr int // DeleteGroup fails this many times first, like a fresh cluster without __consumer_offsets
+}
 
 func (a *fakeAdmin) BrokerCount(context.Context) (int, error) { return 3, nil }
 func (a *fakeAdmin) DeleteGroup(_ context.Context, g string) error {
+	if a.coordinatorErr > 0 {
+		a.coordinatorErr--
+		return errors.New("COORDINATOR_NOT_AVAILABLE")
+	}
 	a.rec.add("deleteGroup %s", g)
 	return nil
 }
@@ -157,5 +165,17 @@ func TestProducePoisonEvery(t *testing.T) {
 		if want := i == 4 || i == 9; isPoison != want {
 			t.Fatalf("record %d poison=%v (sample %q)", i, isPoison, poison[:40])
 		}
+	}
+}
+
+func TestResetWaitsForGroupCoordinator(t *testing.T) {
+	rec := &recorder{}
+	d := &chaos.Docker{R: &fakeRunner{rec: rec}, Dir: t.TempDir(), Project: "kafkalab"}
+	l := New(d, &fakeAdmin{rec: rec, coordinatorErr: 2}, &fakeDB{rec: rec}, events.NewHub())
+	if err := l.Reset(context.Background(), ResetOpts{Instances: 1, Env: chaos.DefaultSvcEnv()}); err != nil {
+		t.Fatalf("reset must retry while the coordinator is not available: %v", err)
+	}
+	if rec.index("deleteGroup gap-lab") < 0 {
+		t.Fatal(rec.log)
 	}
 }

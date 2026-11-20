@@ -6,10 +6,10 @@ import (
 )
 
 func TestJavaProps(t *testing.T) {
-	if got := DefaultProfile().JavaProps(); !slices.Equal(got, []string{"acks=all", "enable.idempotence=true"}) {
+	if got := DefaultProfile().JavaProps(); !slices.Equal(got, []string{"acks=all", "enable.idempotence=true", "compression.type=none"}) {
 		t.Fatal(got)
 	}
-	if got := (ProducerProfile{Acks: "1"}).JavaProps(); !slices.Equal(got, []string{"acks=1", "enable.idempotence=false"}) {
+	if got := (ProducerProfile{Acks: "1", Compression: "snappy"}).JavaProps(); !slices.Equal(got, []string{"acks=1", "enable.idempotence=false", "compression.type=snappy"}) {
 		t.Fatal(got)
 	}
 	got := (ProducerProfile{Acks: "all", Idempotent: true, TxnID: "t1"}).JavaProps()
@@ -42,5 +42,11 @@ func TestLabTopics(t *testing.T) {
 	}
 	if c := byName[CompactedTopic]; *c.Configs["cleanup.policy"] != "compact" {
 		t.Fatalf("%+v", c)
+	}
+}
+
+func TestUnknownCompressionRejected(t *testing.T) {
+	if _, err := NewProducer(ProducerProfile{Acks: "all", Idempotent: true, Compression: "brotli"}); err == nil {
+		t.Fatal("want error")
 	}
 }

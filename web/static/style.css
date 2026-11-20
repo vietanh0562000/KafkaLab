@@ -7,11 +7,11 @@
     --accent: #7c9cf5; --ok: #4cc583; --warn: #e0a84a; --bad: #f0716a; --code: #2a2926; }
 }
 * { box-sizing: border-box; }
-body { margin: 0; font: 14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; background: var(--bg); color: var(--text); }
+body { margin: 0; font: 14px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; background: var(--bg); color: var(--text); }
 header { display: flex; align-items: center; gap: 12px; padding: 10px 16px; border-bottom: 1px solid var(--line); background: var(--panel); }
 header h1 { font-size: 18px; margin: 0; }
 .spacer { flex: 1; }
-main { display: grid; grid-template-columns: 230px minmax(0, 1fr) 470px; height: calc(100vh - 53px); }
+main { display: grid; grid-template-columns: 230px minmax(0, 1fr) 500px; height: calc(100vh - 53px); }
 nav, #center, #live { overflow-y: auto; padding: 14px 16px; }
 nav { border-right: 1px solid var(--line); background: var(--panel); }
 #live { border-left: 1px solid var(--line); background: var(--panel); }
@@ -68,3 +68,4 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 .grid-form label.check { display: flex; align-items: center; gap: 6px; color: var(--text); }
 .grid-form label.check input { width: auto; }
 #containers-ctl td button { margin-right: 4px; }
+#containers-ctl td:last-child { white-space: normal; }

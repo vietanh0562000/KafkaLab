@@ -26,6 +26,7 @@ type ProducerProfile struct {
 	Acks            string // "all", "1" or "0"
 	Idempotent      bool
 	TxnID           string
+	Compression     string // "" means none, the Java default; franz-go would otherwise default to snappy
 	RequestTimeout  time.Duration
 	MaxRequestBytes int32
 }
@@ -33,7 +34,7 @@ type ProducerProfile struct {
 func DefaultProfile() ProducerProfile { return ProducerProfile{Acks: "all", Idempotent: true} }
 
 func (p ProducerProfile) JavaProps() []string {
-	props := []string{"acks=" + p.Acks, fmt.Sprintf("enable.idempotence=%t", p.Idempotent)}
+	props := []string{"acks=" + p.Acks, fmt.Sprintf("enable.idempotence=%t", p.Idempotent), "compression.type=" + p.codec()}
 	if p.TxnID != "" {
 		props = append(props, "transactional.id="+p.TxnID)
 	}
@@ -44,6 +45,13 @@ func (p ProducerProfile) JavaProps() []string {
 		props = append(props, fmt.Sprintf("max.request.size=%d", p.MaxRequestBytes))
 	}
 	return props
+}
+
+func (p ProducerProfile) codec() string {
+	if p.Compression == "" {
+		return "none"
+	}
+	return p.Compression
 }
 
 func NewProducer(p ProducerProfile) (*kgo.Client, error) {
@@ -66,6 +74,14 @@ func NewProducer(p ProducerProfile) (*kgo.Client, error) {
 	if !p.Idempotent {
 		opts = append(opts, kgo.DisableIdempotentWrite())
 	}
+	// The service runs on Alpine, where snappy-java cannot load its glibc-linked native library.
+	codecs := map[string]kgo.CompressionCodec{"none": kgo.NoCompression(), "snappy": kgo.SnappyCompression(),
+		"lz4": kgo.Lz4Compression(), "zstd": kgo.ZstdCompression(), "gzip": kgo.GzipCompression()}
+	codec, ok := codecs[p.codec()]
+	if !ok {
+		return nil, fmt.Errorf("unknown compression.type %q", p.Compression)
+	}
+	opts = append(opts, kgo.ProducerBatchCompression(codec))
 	if p.TxnID != "" {
 		opts = append(opts, kgo.TransactionalID(p.TxnID))
 	}
