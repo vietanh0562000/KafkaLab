@@ -133,8 +133,9 @@ func s(v string) *string { return &v }
 
 func LabTopics() []TopicSpec {
 	return []TopicSpec{
-		{Name: Topic, Partitions: 3, RF: 3, Configs: map[string]*string{
-			"min.insync.replicas": s("2"), "segment.ms": s("10000")}},
+		// No short segment.ms here: it makes brokers answer a waiting fetch at once (measured ~20 ms instead of
+		// up to fetch.max.wait), unlike production. The retention scenario sets it at runtime.
+		{Name: Topic, Partitions: 3, RF: 3, Configs: map[string]*string{"min.insync.replicas": s("2")}},
 		{Name: DLQTopic, Partitions: 3, RF: 3, Configs: map[string]*string{"min.insync.replicas": s("2")}},
 		{Name: CompactedTopic, Partitions: 3, RF: 3, Configs: map[string]*string{
 			"cleanup.policy": s("compact"), "segment.ms": s("10000"),

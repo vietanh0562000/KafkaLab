@@ -276,3 +276,15 @@ After approval: copy this design to `kafka-lab/docs/design.md` and break milesto
   = rejected by the processor; `records_deduplicated_total` = in-batch dedup in the processor (not the DB's
   ON CONFLICT). Known traffic (3 valid, 1 renamed id, 1 without intervalLength) gave polled 5, pass 4,
   drop 1, accepted 4, failed{missing_required_fields} 1, DB rows 3.
+
+## Measured (2026-11-20)
+
+- 0.2 burst: 200,000 records drained by 2 instances in ~6 s (~30k rows/s); peak lag seen ~190,000.
+- 0.2 trickle with jittered gaps: ack→row latency 21–518 ms (p50 148, p90 356), consistent with
+  `fetch.min.bytes`=5 MB never being reached and the broker answering at `fetch.max.wait.ms`=500.
+- A steady 1/s rhythm phase-locks onto the 500 ms fetch cycle: console-consumer delays sat at ~159 ms every time.
+- With `segment.ms=10000` on the topic, the same consumer saw ~20 ms delays: the broker answered the waiting
+  fetch early. `lab.short-term` therefore keeps the default `segment.ms`; scenario 4.3 must set it at runtime.
+- The service image (eclipse-temurin:21-jre-alpine, same as production) cannot load snappy-java's native library
+  (needs glibc `ld-linux-x86-64.so.2`). Snappy-compressed batches make the consumer throw a non-record
+  KafkaException in a loop: polled stays 0, lag grows, the pipeline gauge stays RUNNING. Candidate for an M1 scenario.

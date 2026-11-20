@@ -34,7 +34,8 @@ func TestLabTopics(t *testing.T) {
 		byName[s.Name] = s
 	}
 	st := byName[Topic]
-	if st.Partitions != 3 || st.RF != 3 || *st.Configs["min.insync.replicas"] != "2" || *st.Configs["segment.ms"] != "10000" {
+	// A short segment.ms makes brokers answer fetches early and hides fetch.min.bytes; scenario 0.2 depends on it.
+	if st.Partitions != 3 || st.RF != 3 || *st.Configs["min.insync.replicas"] != "2" || st.Configs["segment.ms"] != nil {
 		t.Fatalf("%+v", st)
 	}
 	if d := byName[DLQTopic]; d.Partitions != 3 || d.RF != 3 {

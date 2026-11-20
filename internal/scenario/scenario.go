@@ -89,6 +89,5 @@ func (s Scenario) Summary() Summary {
 
 // All lists every built scenario in learning order.
 func All() []Scenario {
-	var all []Scenario
-	return all
+	return m0()
 }
