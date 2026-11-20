@@ -259,3 +259,20 @@ After approval: copy this design to `kafka-lab/docs/design.md` and break milesto
   Prometheus metric names (`gap.traffic-data-processing.pipeline.*` per `application.yml`).
 - Mechanics of the "slow DB" trigger (table lock vs `docker pause`) as long as 2.4 asserts the rebalance.
 - How scenario text is stored (Go strings vs embedded markdown).
+
+## Facts confirmed in Task 1 (2026-11-20)
+
+- Tables: `traffic_data.traffic_data_sensor_short_term_data` (PK `start_time`, `permanent_id varchar(255)`),
+  `traffic_data.late_arrival_tracking`.
+- The service's view migrations need tables owned by `gap-td-devices-catalog`
+  (`traffic_data_sensors`, `detection_sites`, `virtual_detection_sites`, `virtual_detection_site_sensors`);
+  the lab creates them from `db/init/10-catalog-tables.sql`. Migrations also need TimescaleDB ≥ 2.2x
+  (`CREATE TABLE ... WITH (tsdb.*)`), so the lab runs 2.27.0.
+- Each service instance runs **two consumer groups** on `lab.short-term`: `gap-lab` (ingestion) and
+  `gap-lab-tracking` (late-arrival tracking). Both commit independently.
+- Prometheus label `pipeline` is `short_term` (and `short_term_tracking`), with an underscore.
+- Counter meanings: `records_polled_total` = delivered by Kafka; `records_filtered_total{result}` = source
+  filter; `records_accepted_total` = handed to the processor (not "written"); `records_failed_total{error_type}`
+  = rejected by the processor; `records_deduplicated_total` = in-batch dedup in the processor (not the DB's
+  ON CONFLICT). Known traffic (3 valid, 1 renamed id, 1 without intervalLength) gave polled 5, pass 4,
+  drop 1, accepted 4, failed{missing_required_fields} 1, DB rows 3.
