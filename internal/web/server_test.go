@@ -33,7 +33,7 @@ func (f *fakeBackend) Snapshot() observe.Snapshot                  { return obse
 var static = fstest.MapFS{"index.html": {Data: []byte("<title>Kafka Lab</title>")}}
 
 func serve(b Backend, hub *events.Hub) *httptest.Server {
-	return httptest.NewServer(NewServer(b, hub, static))
+	return httptest.NewServer(NewServer(b, hub, static, nil))
 }
 
 func post(t *testing.T, url, body string) int {

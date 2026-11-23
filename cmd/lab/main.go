@@ -22,6 +22,7 @@ import (
 	"kafkalab/internal/kafkax"
 	"kafkalab/internal/lab"
 	"kafkalab/internal/observe"
+	"kafkalab/internal/playground"
 	"kafkalab/internal/scenario"
 	"kafkalab/internal/web"
 	static "kafkalab/web"
@@ -98,7 +99,10 @@ func main() {
 		os.Exit(headless(ctx, runner, hub, *run))
 	}
 
-	srv := &http.Server{Addr: *addr, Handler: web.NewServer(backend{lab: l, runner: runner}, hub, static.Static())}
+	pg := playground.New(admin)
+	pg.Containers = docker.States
+	defer pg.Close()
+	srv := &http.Server{Addr: *addr, Handler: web.NewServer(backend{lab: l, runner: runner}, hub, static.Static(), pg)}
 	go func() {
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			log.Fatal(err)

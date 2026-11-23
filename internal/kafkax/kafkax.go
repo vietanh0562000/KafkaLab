@@ -27,6 +27,7 @@ type ProducerProfile struct {
 	Idempotent      bool
 	TxnID           string
 	Compression     string // "" means none, the Java default; franz-go would otherwise default to snappy
+	DeliveryTimeout time.Duration
 	RequestTimeout  time.Duration
 	MaxRequestBytes int32
 }
@@ -37,6 +38,9 @@ func (p ProducerProfile) JavaProps() []string {
 	props := []string{"acks=" + p.Acks, fmt.Sprintf("enable.idempotence=%t", p.Idempotent), "compression.type=" + p.codec()}
 	if p.TxnID != "" {
 		props = append(props, "transactional.id="+p.TxnID)
+	}
+	if p.DeliveryTimeout > 0 {
+		props = append(props, fmt.Sprintf("delivery.timeout.ms=%d", p.DeliveryTimeout.Milliseconds()))
 	}
 	if p.RequestTimeout > 0 {
 		props = append(props, fmt.Sprintf("request.timeout.ms=%d", p.RequestTimeout.Milliseconds()))
@@ -60,7 +64,11 @@ func NewProducer(p ProducerProfile) (*kgo.Client, error) {
 		return nil, errors.New("enable.idempotence=true requires acks=all")
 	}
 	// franz-go retries forever by default; a bound keeps a dead cluster from hanging a scenario.
-	opts := []kgo.Opt{kgo.SeedBrokers(Brokers...), kgo.RecordDeliveryTimeout(30 * time.Second)}
+	delivery := 30 * time.Second
+	if p.DeliveryTimeout > 0 {
+		delivery = p.DeliveryTimeout
+	}
+	opts := []kgo.Opt{kgo.SeedBrokers(Brokers...), kgo.RecordDeliveryTimeout(delivery)}
 	switch p.Acks {
 	case "all":
 		opts = append(opts, kgo.RequiredAcks(kgo.AllISRAcks()))
@@ -114,9 +122,9 @@ func ProduceSync(ctx context.Context, cl *kgo.Client, recs []Record) []Result {
 func ProduceTo(ctx context.Context, cl *kgo.Client, topic string, recs []Record) []Result {
 	krs := make([]*kgo.Record, len(recs))
 	for i, r := range recs {
-		krs[i] = &kgo.Record{Topic: topic, Key: []byte(r.Key), Value: r.Value}
-		if r.Key == "" {
-			krs[i].Key = nil
+		krs[i] = &kgo.Record{Topic: topic, Value: r.Value}
+		if r.Key != "" {
+			krs[i].Key = []byte(r.Key) // a nil key, not an empty one, is what tells the partitioner "no key"
 		}
 	}
 	res := cl.ProduceSync(ctx, krs...)

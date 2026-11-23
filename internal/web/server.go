@@ -27,8 +27,11 @@ type Backend interface {
 	Snapshot() observe.Snapshot
 }
 
-func NewServer(b Backend, hub *events.Hub, static fs.FS) http.Handler {
+func NewServer(b Backend, hub *events.Hub, static fs.FS, pg PG) http.Handler {
 	mux := http.NewServeMux()
+	if pg != nil {
+		routePlayground(mux, pg)
+	}
 	files := http.FileServerFS(static)
 	mux.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-cache")

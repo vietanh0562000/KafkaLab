@@ -5,6 +5,7 @@ package kafkax
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -150,5 +151,24 @@ func TestTopicLifecycleAndProduceTo(t *testing.T) {
 	}
 	if err := a.DeleteTopic(ctx, name); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestBrokerIDsAndGroups(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	a := mustAdmin(t)
+	ids, err := a.BrokerIDs(ctx)
+	if err != nil || len(ids) != 3 || ids[0] != 1 || ids[2] != 3 {
+		t.Fatalf("%v %v", ids, err)
+	}
+	const g = "itest-list-group"
+	if err := a.CommitOffsets(ctx, g, Topic, map[int32]int64{0: 0}); err != nil {
+		t.Fatal(err)
+	}
+	defer a.DeleteGroup(ctx, g)
+	groups, err := a.ListGroups(ctx)
+	if err != nil || !slices.Contains(groups, g) {
+		t.Fatalf("%v %v", groups, err)
 	}
 }

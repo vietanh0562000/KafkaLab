@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/twmb/franz-go/pkg/kadm"
@@ -302,4 +303,86 @@ func (a *Admin) StartOffsets(ctx context.Context, topic string) (map[int32]int64
 		starts[p] = o.Offset
 	}
 	return starts, nil
+}
+
+// BrokerIDs lists the brokers currently registered with the controller, sorted.
+func (a *Admin) BrokerIDs(ctx context.Context) ([]int32, error) {
+	bs, err := a.adm.ListBrokers(ctx)
+	if err != nil {
+		return nil, err
+	}
+	ids := make([]int32, 0, len(bs))
+	for _, b := range bs {
+		ids = append(ids, b.NodeID)
+	}
+	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
+	return ids, nil
+}
+
+func (a *Admin) ListGroups(ctx context.Context) ([]string, error) {
+	lg, err := a.adm.ListGroups(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return lg.Groups(), nil
+}
+
+// TopicConfig returns the effective value of one topic config, default included.
+func (a *Admin) TopicConfig(ctx context.Context, topic, name string) (string, error) {
+	rcs, err := a.adm.DescribeTopicConfigs(ctx, topic)
+	if err != nil {
+		return "", err
+	}
+	rc, err := rcs.On(topic, nil)
+	if err != nil {
+		return "", err
+	}
+	if rc.Err != nil {
+		return "", rc.Err
+	}
+	for _, c := range rc.Configs {
+		if c.Key == name && c.Value != nil {
+			return *c.Value, nil
+		}
+	}
+	return "", fmt.Errorf("%s has no %s", topic, name)
+}
+
+// Leaders reads leadership and ISR from metadata alone (End is -1), so it answers while a leader is unreachable.
+func (a *Admin) Leaders(ctx context.Context, topic string) ([]PartitionInfo, error) {
+	md, err := a.adm.Metadata(ctx, topic)
+	if err != nil {
+		return nil, err
+	}
+	td, ok := md.Topics[topic]
+	if !ok || td.Err != nil {
+		return nil, fmt.Errorf("topic %s: %v", topic, td.Err)
+	}
+	out := make([]PartitionInfo, 0, len(td.Partitions))
+	for _, pd := range td.Partitions {
+		out = append(out, PartitionInfo{Partition: pd.Partition, Leader: pd.Leader, Replicas: pd.Replicas, ISR: pd.ISR, End: -1})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Partition < out[j].Partition })
+	return out, nil
+}
+
+// OffsetsPartial lists start and end offsets; a partition whose leader did not answer is left out.
+func (a *Admin) OffsetsPartial(ctx context.Context, topic string) (starts, ends map[int32]int64, err error) {
+	var wg sync.WaitGroup
+	var startErr, endErr error
+	var so, eo kadm.ListedOffsets
+	wg.Add(2)
+	go func() { defer wg.Done(); so, startErr = a.adm.ListStartOffsets(ctx, topic) }()
+	go func() { defer wg.Done(); eo, endErr = a.adm.ListEndOffsets(ctx, topic) }()
+	wg.Wait()
+	collect := func(lo kadm.ListedOffsets) map[int32]int64 {
+		m := map[int32]int64{}
+		for p, o := range lo[topic] {
+			if o.Err == nil {
+				m[p] = o.Offset
+			}
+		}
+		return m
+	}
+	return collect(so), collect(eo), errors.Join(startErr, endErr)
 }
