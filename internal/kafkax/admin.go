@@ -241,7 +241,7 @@ func (a *Admin) ListTopics(ctx context.Context) ([]TopicInfo, error) {
 	}
 	var out []TopicInfo
 	for _, t := range td.Sorted() {
-		if t.IsInternal || strings.HasPrefix(t.Topic, "__") {
+		if t.Err != nil || t.IsInternal || strings.HasPrefix(t.Topic, "__") {
 			continue
 		}
 		rf := 0

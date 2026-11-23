@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -170,5 +171,27 @@ func TestBrokerIDsAndGroups(t *testing.T) {
 	groups, err := a.ListGroups(ctx)
 	if err != nil || !slices.Contains(groups, g) {
 		t.Fatalf("%v %v", groups, err)
+	}
+}
+
+func TestListTopicsSkipsTopicsThatDoNotExist(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	a := mustAdmin(t)
+	// The lab's state read asks for one missing topic and for all topics at once; the client may merge them.
+	for i := 0; i < 20; i++ {
+		var wg sync.WaitGroup
+		wg.Add(1)
+		go func() { defer wg.Done(); a.Leaders(ctx, "itest-missing") }()
+		topics, err := a.ListTopics(ctx)
+		wg.Wait()
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, ti := range topics {
+			if ti.Name == "itest-missing" {
+				t.Fatalf("round %d: missing topic listed: %+v", i, topics)
+			}
+		}
 	}
 }

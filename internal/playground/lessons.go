@@ -351,6 +351,7 @@ Service gap cũng làm vậy: group <code>gap-lab-tracking</code> đọc cùng t
 			"Ở hàng Broker, bấm kill trên broker đó.",
 			"Gửi vài record bằng p1 (acks=all). Theo dõi leader và ISR của từng partition trong khoảng 15 giây.",
 			"Bấm start để bật lại broker và xem nó quay lại ISR.",
+			"Lệnh CLI của lab chạy trong lab-kafka-1. Nếu broker 1 đang tắt, đổi thành lab-kafka-2 và kafka-2:9092.",
 		},
 		Goal: "ISR của orders bị co lại khi một broker chết, và một lần gửi acks=all vẫn thành công trong lúc đó",
 		check: func(in LessonInput) (bool, string) {
@@ -365,7 +366,7 @@ hết <code>broker.session.timeout.ms</code> (mặc định 9 s): lab đo đư�
 leader đã chết. Broker tắt có trật tự (<code>docker stop</code>) tự báo trước và nhường leader: lab đo được khoảng 1 s. Leader mới luôn được
 chọn trong ISR.</p>
 <p>Với <code>acks=all</code>, leader chỉ xác nhận khi mọi replica <i>trong ISR</i> đã có record. Ngay sau khi một follower bị kill, nó vẫn
-còn trong ISR, nên leader phải đợi nó cho tới khi ISR co lại: lab đo được một lần gửi bị treo 7,5–8,4 s. Sau đó ISR còn 2, vẫn ≥
+còn trong ISR, nên leader phải đợi nó cho tới khi ISR co lại: lab đo được các lần gửi bị treo 6,8–8,4 s. Sau đó ISR còn 2, vẫn ≥
 <code>min.insync.replicas=2</code>, nên ghi lại nhanh như thường. Để ý cột "đã gửi" của producer: thời gian của mỗi lần gửi nằm ở đó.</p>
 <p>Broker sống lại thì follower đuổi kịp rồi vào lại ISR. Leader không chuyển về ngay: Kafka đưa leader về replica "ưa thích" (đứng đầu danh
 sách replica) theo chu kỳ, mặc định 5 phút (<code>leader.imbalance.check.interval.seconds</code>).</p>`,
