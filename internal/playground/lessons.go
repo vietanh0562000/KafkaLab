@@ -88,9 +88,9 @@ var Lessons = []Lesson{
 		Question: "Tạo topic orders có 3 partition rồi gửi 6 record với key k{i} (thành k1 … k6). Mỗi record nằm ở cả 3 partition hay chỉ một? " +
 			"Offset của chúng là 0 tới 5 cho cả topic, hay mỗi partition đếm riêng? Sau đó gửi 6 record không có key: chúng được rải ra hay dồn lại?",
 		Steps: []string{
-			"Ô Topic: tên orders, 3 partition, RF 3, min ISR 2, rồi bấm Tạo.",
-			"Ô Producer: tạo producer p1 (để mặc định acks=all).",
-			"Gửi 6 record với key k{i} (số lượng 6): lab thay {i} bằng 1…6. Nhìn các làn partition: mỗi ô là một record, số trong ô là offset.",
+			"Bấm “Tạo topic”. Giá trị mặc định đã đúng: tên orders, 3 partition, replication factor 3, min.insync.replicas 2.",
+			"Ở cột Producer, bấm “Tạo producer” để tạo p1 (để mặc định acks=all).",
+			"Gửi 6 record với key k{i} (số lượng 6): lab thay {i} bằng 1…6. Nhìn các hàng P0, P1, P2: mỗi ô là một record, số nhỏ ở góc ô là offset.",
 			"Gửi tiếp 6 record, để trống key.",
 		},
 		Goal: "orders có 3 partition, RF 3, min ISR 2, ít nhất 6 record, và record nằm ở ít nhất 2 partition",
@@ -141,7 +141,7 @@ hay gửi một lượt, đều vào cùng một partition. Muốn biết record
 		Steps: []string{
 			"Gửi 5 record với key xe-1.",
 			"Gửi 5 record với key xe-{i}: lab thay {i} bằng 1…5.",
-			"So sánh partition của từng key ở danh sách “đã gửi” của producer và trên các làn partition.",
+			"So sánh partition của từng key ở danh sách lần gửi dưới producer và trên các hàng partition. Ô cùng màu sọc là cùng key.",
 		},
 		Goal: "một key được gửi ít nhất 3 lần, luôn vào cùng một partition; và các key khác nhau rơi vào ít nhất 2 partition",
 		check: func(in LessonInput) (bool, string) {
@@ -196,7 +196,7 @@ trước record cũ còn nằm ở partition cũ. Vì vậy số partition nên 
 		Question: "Tạo consumer c1 trong group g1 với auto.offset.reset=earliest, rồi bấm Poll vài lần. c1 nhận record theo thứ tự nào: " +
 			"theo thời điểm gửi trên cả topic, hay theo offset trong từng partition? Nếu chọn latest thì c1 nhận gì?",
 		Steps: []string{
-			"Ô Consumer: tên c1, group g1, topic orders, earliest, rồi bấm Tạo.",
+			"Ở cột Consumer, tạo c1: group g1, topic orders, earliest.",
 			"Bấm Poll. Nhìn các chip P0/P1/P2 trên thẻ c1: đó là partition c1 được gán.",
 			"Bấm Poll thêm vài lần. Để ý partition và offset của từng record nhận được (dạng P1@3).",
 		},
@@ -242,7 +242,7 @@ này.</p>
 		Steps: []string{
 			"Gửi thêm vài record vào orders nếu cần. Poll c1 một lần, không bấm Commit.",
 			"Xoá c1, tạo lại c1 (group g1, earliest), rồi Poll. Record đọc lại được đánh dấu “đọc lại”.",
-			"Poll rồi bấm Commit. Nhìn cờ g1 trên các làn partition: nó chỉ vào offset nào?",
+			"Poll rồi bấm Commit. Nhìn nhãn tím g1 dưới các hàng partition: nó nằm ở offset nào?",
 			"Xoá và tạo lại c1 lần nữa, rồi Poll.",
 		},
 		Goal: "thấy record bị đọc lại trong orders, và commit được ít nhất một lần",
@@ -331,7 +331,7 @@ Lab không mô phỏng luật đó.</p>`,
 		Steps: []string{
 			"Tạo d1: group g2, topic orders, earliest.",
 			"Poll d1 vài lần rồi Commit.",
-			"Nhìn hai cờ g1 và g2 trên các làn partition.",
+			"Nhìn hai nhãn tím g1 và g2 dưới các hàng partition.",
 		},
 		Goal: "ít nhất 2 group khác nhau đã đọc được record của orders",
 		check: func(in LessonInput) (bool, string) {
@@ -361,8 +361,8 @@ Service gap cũng làm vậy: group <code>gap-lab-tracking</code> đọc cùng t
 		Question: "orders có RF 3: mỗi partition có 3 bản sao trên 3 broker, một bản là leader. Kill broker đang là leader của partition 0. " +
 			"Leader và ISR thay đổi thế nào, sau bao lâu? Gửi record với acks=all ngay sau đó có thành công không?",
 		Steps: []string{
-			"Nhìn làn partition 0: broker nào là leader (L), ISR gồm những broker nào.",
-			"Ở hàng Broker, bấm kill trên broker đó.",
+			"Nhìn hàng P0: ô replica tô đậm là leader, các ô viền xanh là replica trong ISR.",
+			"Trong khung Cluster, bấm Kill trên broker đó.",
 			"Gửi vài record bằng p1 (acks=all). Theo dõi leader và ISR của từng partition trong khoảng 15 giây.",
 			"Bấm start để bật lại broker và xem nó quay lại ISR.",
 			"Lệnh CLI của lab chạy trong lab-kafka-1. Nếu broker 1 đang tắt, đổi thành lab-kafka-2 và kafka-2:9092.",
@@ -385,7 +385,7 @@ chọn trong ISR, vì <code>unclean.leader.election.enable=false</code> (mặc �
 bạn đặt delivery timeout ngắn ở prod, một lần chuyển leader bình thường cũng thành lỗi gửi.</p>
 <p>Với <code>acks=all</code>, leader chỉ xác nhận khi mọi replica <i>trong ISR</i> đã có record. Ngay sau khi một follower bị kill, nó vẫn
 còn trong ISR, nên leader phải đợi nó cho tới khi ISR co lại: lab đo được các lần gửi bị treo 6,8–8,4 s. Sau đó ISR còn 2, vẫn ≥
-<code>min.insync.replicas=2</code>, nên ghi lại nhanh như thường. Để ý cột "đã gửi" của producer: thời gian của mỗi lần gửi nằm ở đó.</p>
+<code>min.insync.replicas=2</code>, nên ghi lại nhanh như thường. Thời gian của mỗi lần gửi hiện ở cuối dòng, trong danh sách lần gửi dưới producer.</p>
 <p>Broker sống lại thì follower đuổi kịp rồi vào lại ISR. Leader không chuyển về ngay: Kafka đưa leader về replica "ưa thích" (đứng đầu danh
 sách replica) theo chu kỳ, mặc định 5 phút (<code>leader.imbalance.check.interval.seconds</code>).</p>`,
 		CLI: []string{cliTopicDescribe + "   # cột Leader và Isr", "docker kill lab-kafka-2", "docker start lab-kafka-2"},
