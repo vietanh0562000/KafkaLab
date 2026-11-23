@@ -5,6 +5,7 @@ package kafkax
 import (
 	"context"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 )
@@ -106,5 +107,48 @@ func TestReadAllFromStart(t *testing.T) {
 	got, err := ReadAll(ctx, Topic, 3)
 	if err != nil || len(got) != 3 {
 		t.Fatalf("%v %v", got, err)
+	}
+}
+
+func TestTopicLifecycleAndProduceTo(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+	a := mustAdmin(t)
+	const name = "itest-pg"
+	_ = a.DeleteTopic(ctx, name)
+	if err := a.CreateTopic(ctx, TopicSpec{Name: name, Partitions: 2, RF: 3}); err != nil {
+		t.Fatal(err)
+	}
+	topics, err := a.ListTopics(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var found TopicInfo
+	for _, ti := range topics {
+		if ti.Name == name {
+			found = ti
+		}
+		if strings.HasPrefix(ti.Name, "__") {
+			t.Fatalf("internal topic listed: %s", ti.Name)
+		}
+	}
+	if found.Partitions != 2 || found.RF != 3 {
+		t.Fatalf("%+v", found)
+	}
+	cl, err := NewProducer(DefaultProfile())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cl.Close()
+	res := ProduceTo(ctx, cl, name, []Record{{Key: "k", Value: []byte("v")}, {Key: "k", Value: []byte("v")}})
+	if res[0].Err != nil || res[1].Partition != res[0].Partition || res[1].Offset != res[0].Offset+1 {
+		t.Fatalf("%+v", res)
+	}
+	starts, err := a.StartOffsets(ctx, name)
+	if err != nil || starts[res[0].Partition] != 0 {
+		t.Fatalf("%v %v", starts, err)
+	}
+	if err := a.DeleteTopic(ctx, name); err != nil {
+		t.Fatal(err)
 	}
 }

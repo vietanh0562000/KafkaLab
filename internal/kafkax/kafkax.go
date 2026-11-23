@@ -105,11 +105,16 @@ type Result struct {
 	Err       error
 }
 
-// ProduceSync sends recs and returns one result per record, in order.
+// ProduceSync sends recs to the lab topic and returns one result per record, in order.
 func ProduceSync(ctx context.Context, cl *kgo.Client, recs []Record) []Result {
+	return ProduceTo(ctx, cl, Topic, recs)
+}
+
+// ProduceTo sends recs to topic; an empty key is sent as no key, which leaves the choice to the partitioner.
+func ProduceTo(ctx context.Context, cl *kgo.Client, topic string, recs []Record) []Result {
 	krs := make([]*kgo.Record, len(recs))
 	for i, r := range recs {
-		krs[i] = &kgo.Record{Topic: Topic, Key: []byte(r.Key), Value: r.Value}
+		krs[i] = &kgo.Record{Topic: topic, Key: []byte(r.Key), Value: r.Value}
 		if r.Key == "" {
 			krs[i].Key = nil
 		}

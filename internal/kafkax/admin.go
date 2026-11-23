@@ -225,3 +225,81 @@ func (a *Admin) EndOffsetSum(ctx context.Context, topic string) (int64, error) {
 	}
 	return sum, err
 }
+
+type TopicInfo struct {
+	Name       string `json:"name"`
+	Partitions int    `json:"partitions"`
+	RF         int    `json:"rf"`
+}
+
+// ListTopics lists user topics; internal ones such as __consumer_offsets are left out.
+func (a *Admin) ListTopics(ctx context.Context) ([]TopicInfo, error) {
+	td, err := a.adm.ListTopics(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var out []TopicInfo
+	for _, t := range td.Sorted() {
+		if t.IsInternal || strings.HasPrefix(t.Topic, "__") {
+			continue
+		}
+		rf := 0
+		for _, p := range t.Partitions {
+			rf = len(p.Replicas)
+			break
+		}
+		out = append(out, TopicInfo{Name: t.Topic, Partitions: len(t.Partitions), RF: rf})
+	}
+	return out, nil
+}
+
+// CreateTopic creates one topic and waits until every partition has a leader.
+func (a *Admin) CreateTopic(ctx context.Context, sp TopicSpec) error {
+	cr, err := a.adm.CreateTopics(ctx, sp.Partitions, sp.RF, sp.Configs, sp.Name)
+	if err == nil {
+		err = cr[sp.Name].Err
+	}
+	if err != nil {
+		return fmt.Errorf("create %s: %w", sp.Name, err)
+	}
+	deadline := time.Now().Add(30 * time.Second)
+	for {
+		if _, err := a.Partitions(ctx, sp.Name); err == nil {
+			return nil
+		} else if time.Now().After(deadline) {
+			return fmt.Errorf("topic %s not ready: %w", sp.Name, err)
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(300 * time.Millisecond):
+		}
+	}
+}
+
+func (a *Admin) DeleteTopic(ctx context.Context, name string) error {
+	resp, err := a.adm.DeleteTopics(ctx, name)
+	if err != nil {
+		return err
+	}
+	if r := resp[name]; r.Err != nil && !errors.Is(r.Err, kerr.UnknownTopicOrPartition) {
+		return fmt.Errorf("delete %s: %w", name, r.Err)
+	}
+	return nil
+}
+
+// StartOffsets returns each partition's log start offset (0 until retention deletes something).
+func (a *Admin) StartOffsets(ctx context.Context, topic string) (map[int32]int64, error) {
+	lo, err := a.adm.ListStartOffsets(ctx, topic)
+	if err != nil {
+		return nil, err
+	}
+	starts := map[int32]int64{}
+	for p, o := range lo[topic] {
+		if o.Err != nil {
+			return nil, fmt.Errorf("start offset %s-%d: %w", topic, p, o.Err)
+		}
+		starts[p] = o.Offset
+	}
+	return starts, nil
+}
