@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"slices"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -30,6 +31,7 @@ type PartitionView struct {
 
 type TopicView struct {
 	Name       string          `json:"name"`
+	RF         int             `json:"rf"`
 	MinISR     int             `json:"minIsr"`
 	Partitions []PartitionView `json:"partitions"`
 }
@@ -162,11 +164,19 @@ func (m *Manager) brokers(ctx context.Context) ([]BrokerView, error) {
 // topicView never fails because one leader is down: leadership comes from metadata, and offsets the dead
 // leader cannot answer stay -1 while the last records seen are kept.
 func (m *Manager) topicView(ctx context.Context, topic string, withRecords bool) (*TopicView, error) {
+	if strings.HasPrefix(topic, "__") {
+		return nil, fmt.Errorf("%s is internal", topic)
+	}
+	// Scenario topics can be looked at, but their records are not tailed: a 200k burst would stream through.
+	withRecords = withRecords && validateTopicName(topic) == nil
 	parts, err := m.admin.Leaders(ctx, topic)
 	if err != nil {
 		return nil, err
 	}
 	tv := &TopicView{Name: topic}
+	if len(parts) > 0 {
+		tv.RF = len(parts[0].Replicas)
+	}
 	var offErr error
 	starts, ends := map[int32]int64{}, map[int32]int64{}
 	var wg sync.WaitGroup

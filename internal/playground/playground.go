@@ -15,6 +15,8 @@ import (
 	"kafkalab/internal/kafkax"
 )
 
+const DeliveryTimeout = 20 * time.Second
+
 // Brokers are the lab's broker containers, in node-id order.
 var Brokers = []string{"lab-kafka-1", "lab-kafka-2", "lab-kafka-3"}
 
@@ -44,32 +46,70 @@ func New(a *kafkax.Admin) *Manager {
 		}}
 }
 
-func (m *Manager) Close() {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.closeClientsLocked()
+func (m *Manager) Close() { closeAll(m.takeClients()) }
+
+type clientSet struct {
+	producers []*producer
+	consumers []*consumer
+	tails     []*tail
 }
 
-func (m *Manager) closeClientsLocked() {
-	for _, c := range m.consumers {
-		c.close()
-	}
+// takeClients empties the registry under the lock; closing happens outside it, because a consumer's
+// LeaveGroup can retry for 30 s while a coordinator is down and State must keep answering meanwhile.
+func (m *Manager) takeClients() clientSet {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	var cs clientSet
 	for _, p := range m.producers {
-		p.cl.Close()
+		cs.producers = append(cs.producers, p)
+	}
+	for _, c := range m.consumers {
+		cs.consumers = append(cs.consumers, c)
 	}
 	for _, t := range m.tails {
-		t.close()
+		cs.tails = append(cs.tails, t)
 	}
 	m.producers, m.consumers, m.tails = map[string]*producer{}, map[string]*consumer{}, map[string]*tail{}
+	return cs
+}
+
+func closeAll(cs clientSet) {
+	var wg sync.WaitGroup
+	run := func(f func()) {
+		wg.Add(1)
+		go func() { defer wg.Done(); f() }()
+	}
+	for _, c := range cs.consumers {
+		run(c.close)
+	}
+	for _, p := range cs.producers {
+		run(p.cl.Close)
+	}
+	for _, t := range cs.tails {
+		run(t.close)
+	}
+	wg.Wait()
+}
+
+// forgetAll closes every client and resets lesson progress and history.
+func (m *Manager) forgetAll() {
+	cs := m.takeClients()
+	m.facts.reset()
+	m.tracker.reset()
+	m.mu.Lock()
+	m.done = map[string]bool{}
+	m.mu.Unlock()
+	closeAll(cs)
 }
 
 func (m *Manager) AddProducer(name string, prof kafkax.ProducerProfile) error {
 	if err := validateClientName(name); err != nil {
 		return err
 	}
-	// Short enough to watch a send give up in the UI; the Java default is 120 s.
+	// Long enough to outlast a killed leader's move (~9 s plus a metadata refresh) in lesson 7, short enough to
+	// watch a send give up in lesson 8; the Java default is 120 s.
 	if prof.DeliveryTimeout == 0 {
-		prof.DeliveryTimeout = 10 * time.Second
+		prof.DeliveryTimeout = DeliveryTimeout
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -92,7 +132,7 @@ func (m *Manager) RemoveProducer(name string) error {
 		return fmt.Errorf("no producer %s", name)
 	}
 	delete(m.producers, name)
-	go p.cl.Close() // waits for in-flight records, which can take the whole delivery timeout
+	go p.cl.Close() // fails records still buffered with ErrClientClosed; off the request path in case a broker is slow
 	return nil
 }
 
@@ -109,8 +149,8 @@ func (m *Manager) Send(ctx context.Context, producerName, topic, key, value stri
 	if count < 1 || count > maxSendCount {
 		return nil, fmt.Errorf("count must be 1..%d", maxSendCount)
 	}
-	if topic == "" {
-		return nil, errors.New("topic is required")
+	if err := validateTopicName(topic); err != nil {
+		return nil, err
 	}
 	recs := make([]kafkax.Record, count)
 	for i := range recs {
@@ -166,8 +206,15 @@ func (m *Manager) AddConsumer(name, group, topic, reset string) error {
 	if err := validateClientName(name); err != nil {
 		return err
 	}
-	if group == "" || topic == "" {
-		return errors.New("group and topic are required")
+	if group == "" {
+		return errors.New("group is required")
+	}
+	// Joining the service's group would take partitions from it and overwrite its committed offsets.
+	if strings.HasPrefix(group, kafkax.Group) {
+		return fmt.Errorf("group %s belongs to the gap service; use another group.id", group)
+	}
+	if err := validateTopicName(topic); err != nil {
+		return err
 	}
 	if reset != "earliest" && reset != "latest" {
 		return fmt.Errorf("auto.offset.reset must be earliest or latest, not %q", reset)
@@ -259,10 +306,12 @@ func (m *Manager) CreateTopic(ctx context.Context, r TopicReq) error {
 		return fmt.Errorf("need 1-12 partitions, RF 1-%d and 1 <= min.insync.replicas <= RF", len(Brokers))
 	}
 	isr := strconv.Itoa(r.MinISR)
-	err := m.admin.CreateTopic(ctx, kafkax.TopicSpec{Name: r.Name, Partitions: int32(r.Partitions), RF: int16(r.RF),
-		Configs: map[string]*string{"min.insync.replicas": &isr}})
+	if err := m.admin.CreateTopic(ctx, kafkax.TopicSpec{Name: r.Name, Partitions: int32(r.Partitions), RF: int16(r.RF),
+		Configs: map[string]*string{"min.insync.replicas": &isr}}); err != nil {
+		return err // e.g. it already exists: what was seen of it still holds
+	}
 	m.dropTopicState(r.Name)
-	return err
+	return nil
 }
 
 func (m *Manager) DeleteTopic(ctx context.Context, name string) error {
@@ -274,7 +323,7 @@ func (m *Manager) DeleteTopic(ctx context.Context, name string) error {
 	return err
 }
 
-// dropTopicState forgets what was seen of a topic, so a recreated one does not inherit offsets or facts.
+// dropTopicState forgets a topic's tail and redelivery history, so a recreated one starts clean.
 func (m *Manager) dropTopicState(name string) {
 	m.mu.Lock()
 	if t, ok := m.tails[name]; ok {
@@ -287,11 +336,7 @@ func (m *Manager) dropTopicState(name string) {
 
 // Clear closes every client and deletes the playground's topics and groups; scenario ones are kept.
 func (m *Manager) Clear(ctx context.Context) error {
-	m.mu.Lock()
-	m.closeClientsLocked()
-	m.facts, m.done = newFacts(), map[string]bool{}
-	m.mu.Unlock()
-	m.tracker.reset()
+	m.forgetAll()
 	topics, err := m.admin.ListTopics(ctx)
 	if err != nil {
 		return err
@@ -314,18 +359,25 @@ func (m *Manager) Clear(ctx context.Context) error {
 	return errors.Join(errs...)
 }
 
+// tail keeps one reader, for the topic on screen; a reader left on another topic would keep fetching for nothing.
 func (m *Manager) tail(topic string) (*tail, error) {
 	m.mu.Lock()
-	defer m.mu.Unlock()
 	if t, ok := m.tails[topic]; ok {
+		m.mu.Unlock()
 		return t, nil
 	}
-	t, err := newTail(topic)
-	if err != nil {
-		return nil, err
+	var stale []*tail
+	for name, t := range m.tails {
+		stale = append(stale, t)
+		delete(m.tails, name)
 	}
-	m.tails[topic] = t
-	return t, nil
+	t, err := newTail(topic)
+	if err == nil {
+		m.tails[topic] = t
+	}
+	m.mu.Unlock()
+	closeAll(clientSet{tails: stale})
+	return t, err
 }
 
 func (m *Manager) clients() ([]*producer, []*consumer) {

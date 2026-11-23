@@ -167,9 +167,15 @@ func (c *consumer) poll(ctx context.Context, max int, wait time.Duration) ([]Rec
 	return out, pollErr
 }
 
+var errNothingToCommit = errors.New("không có offset mới để commit: hãy Poll trước")
+
 func (c *consumer) commit(ctx context.Context) error {
 	c.pollMu.Lock()
 	defer c.pollMu.Unlock()
+	// franz-go returns nil when nothing is uncommitted; saying so keeps a no-op from looking like a commit.
+	if len(c.cl.UncommittedOffsets()) == 0 {
+		return errNothingToCommit
+	}
 	return c.cl.CommitUncommittedOffsets(ctx)
 }
 

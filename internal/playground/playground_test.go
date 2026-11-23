@@ -128,3 +128,54 @@ func TestSendShowsPendingUntilAcked(t *testing.T) {
 		t.Fatalf("pending entry must be replaced by the result: %+v %+v", res, got)
 	}
 }
+
+func TestPlaygroundStaysOffScenarioTopicsAndGroups(t *testing.T) {
+	m := New(nil)
+	defer m.Close()
+	if err := m.AddProducer("p1", kafkax.DefaultProfile()); err != nil {
+		t.Fatal(err)
+	}
+	// The gap service consumes lab.short-term as group gap-lab; a stray record or commit there breaks the scenarios.
+	for _, topic := range []string{"lab.short-term", "dlq-lab.short-term", "__consumer_offsets"} {
+		if _, err := m.Send(context.Background(), "p1", topic, "k", "v", 1); err == nil {
+			t.Fatalf("send to %s accepted", topic)
+		}
+		if err := m.AddConsumer("c1", "g1", topic, "earliest"); err == nil {
+			t.Fatalf("consumer on %s accepted", topic)
+		}
+	}
+	for _, group := range []string{"gap-lab", "gap-lab-tracking"} {
+		if err := m.AddConsumer("c1", group, "orders", "earliest"); err == nil {
+			t.Fatalf("group %s accepted", group)
+		}
+	}
+}
+
+func TestForgetAllRacesNothing(t *testing.T) {
+	m := New(nil)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for i := 0; i < 200; i++ {
+			m.facts.recordSends([]SendView{{Topic: "orders", Acks: "all"}})
+			m.facts.snapshot()
+		}
+	}()
+	for i := 0; i < 50; i++ {
+		m.forgetAll()
+	}
+	<-done
+}
+
+func TestAcksAllRejectedNeedsAReplicaError(t *testing.T) {
+	f := newFacts()
+	// Deleting the producer mid-send fails the record too; that is not min.insync.replicas at work.
+	f.recordSends([]SendView{{Topic: "orders", Acks: "all", BrokersDown: 2, Err: "client closed"}})
+	if f.snapshot().Has("orders", factAcksAllRejected) {
+		t.Fatal("client closed counted as a rejection")
+	}
+	f.recordSends([]SendView{{Topic: "orders", Acks: "all", BrokersDown: 2, Err: "records have timed out before they were able to be produced"}})
+	if !f.snapshot().Has("orders", factAcksAllRejected) {
+		t.Fatal("timeout not counted")
+	}
+}

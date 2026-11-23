@@ -93,7 +93,7 @@ var Lessons = []Lesson{
 			"Gửi 6 record với key k{i} (số lượng 6): lab thay {i} bằng 1…6. Nhìn các làn partition: mỗi ô là một record, số trong ô là offset.",
 			"Gửi tiếp 6 record, để trống key.",
 		},
-		Goal: "orders có 3 partition, ít nhất 6 record, và record nằm ở ít nhất 2 partition",
+		Goal: "orders có 3 partition, RF 3, min ISR 2, ít nhất 6 record, và record nằm ở ít nhất 2 partition",
 		check: func(in LessonInput) (bool, string) {
 			if in.Topic == nil {
 				return false, "chưa có topic orders"
@@ -104,9 +104,17 @@ var Lessons = []Lesson{
 					used++
 				}
 			}
-			n := totalRecords(in.Topic)
-			return len(in.Topic.Partitions) == 3 && n >= 6 && used >= 2,
-				fmt.Sprintf("orders: %d partition, %d record, %d partition có dữ liệu", len(in.Topic.Partitions), n, used)
+			n, rf := totalRecords(in.Topic), 0
+			if len(in.Topic.Partitions) > 0 {
+				rf = len(in.Topic.Partitions[0].Replicas)
+			}
+			detail := fmt.Sprintf("orders: %d partition, RF %d, min ISR %d, %d record, %d partition có dữ liệu",
+				len(in.Topic.Partitions), rf, in.Topic.MinISR, n, used)
+			// Lessons 7 and 8 kill brokers and rely on RF 3 with min ISR 2.
+			if rf != 3 || in.Topic.MinISR != 2 {
+				return false, detail + " · bài 7 và 8 cần RF 3, min ISR 2: xoá orders rồi tạo lại"
+			}
+			return len(in.Topic.Partitions) == 3 && n >= 6 && used >= 2, detail
 		},
 		Reveal: `<p><b>Topic</b> chỉ là một cái tên. Dữ liệu thật nằm trong các <b>partition</b>: mỗi partition là một log chỉ ghi nối thêm vào
 cuối (append-only), lưu trên đĩa của broker. Mỗi record vào <b>đúng một</b> partition.</p>
@@ -176,6 +184,7 @@ trước record cũ còn nằm ở partition cũ. Vì vậy số partition nên 
 		CLI: []string{
 			"docker exec -it lab-kafka-1 /opt/kafka/bin/kafka-console-producer.sh --bootstrap-server kafka-1:9092 --topic orders --property parse.key=true --property key.separator=:   # rồi gõ  xe-1:hello",
 			Cli("kafka-console-consumer.sh", "--topic orders --from-beginning --property print.key=true --property print.partition=true --property print.offset=true --timeout-ms 5000"),
+			Cli("kafka-topics.sh", "--alter --topic orders --partitions 4") + "   # rồi gửi lại key xe-1 xem nó vào partition nào",
 		},
 		Confirm: []string{
 			"Bạn có 1 triệu sensor và 3 partition. Vì sao thứ tự toàn cục giữa các sensor không được đảm bảo, và điều đó có thành vấn đề không?",
@@ -188,8 +197,8 @@ trước record cũ còn nằm ở partition cũ. Vì vậy số partition nên 
 			"theo thời điểm gửi trên cả topic, hay theo offset trong từng partition? Nếu chọn latest thì c1 nhận gì?",
 		Steps: []string{
 			"Ô Consumer: tên c1, group g1, topic orders, earliest, rồi bấm Tạo.",
-			"Bấm Poll. Lần đầu có thể mất vài giây vì c1 phải vào group và được chia partition.",
-			"Bấm Poll thêm vài lần. Để ý cột P và offset của từng record nhận được.",
+			"Bấm Poll. Nhìn các chip P0/P1/P2 trên thẻ c1: đó là partition c1 được gán.",
+			"Bấm Poll thêm vài lần. Để ý partition và offset của từng record nhận được (dạng P1@3).",
 		},
 		Goal: "một consumer của orders nhận được record từ ít nhất 2 partition",
 		check: func(in LessonInput) (bool, string) {
@@ -209,18 +218,20 @@ trước record cũ còn nằm ở partition cũ. Vì vậy số partition nên 
 			}
 			return best >= 2, detail
 		},
-		Reveal: `<p>Poll gửi fetch request tới <b>leader</b> của từng partition được gán cho consumer, rồi trả về record theo offset tăng dần
-<i>trong từng partition</i>. Record của các partition khác nhau đến xen kẽ nhau tuỳ thời điểm fetch: không có thứ tự chung.</p>
-<p>Group mới chưa có <b>committed offset</b>, nên <code>auto.offset.reset</code> quyết định chỗ bắt đầu: <code>earliest</code> đọc từ
-đầu log, <code>latest</code> chỉ đọc record đến sau khi consumer được gán partition. Mặc định của Java là <code>latest</code>: một
-service mới triển khai sẽ bỏ qua toàn bộ dữ liệu cũ, trừ khi bạn đổi cấu hình này.</p>
+		Reveal: `<p>Consumer gửi fetch request tới <b>leader</b> của từng partition được gán cho nó; cả Java client lẫn franz-go đều fetch trước
+ở nền, còn poll lấy những record đã về. Record trả ra theo offset tăng dần <i>trong từng partition</i>. Record của các partition khác nhau
+đến xen kẽ nhau tuỳ thời điểm fetch: không có thứ tự chung.</p>
+<p>Chỗ bắt đầu đọc được quyết định <b>theo từng partition</b>: có committed offset thì đọc từ đó; chưa có (hoặc offset đó không còn trong
+log vì đã bị retention xoá) thì <code>auto.offset.reset</code> quyết định: <code>earliest</code> đọc từ đầu log, <code>latest</code> chỉ đọc
+record đến sau. Mặc định của Java là <code>latest</code>: một service mới triển khai sẽ bỏ qua toàn bộ dữ liệu cũ, trừ khi bạn đổi cấu hình
+này.</p>
 <p>Vị trí đọc hiện tại (position) chỉ nằm trong bộ nhớ của consumer. Nó chưa được lưu ở đâu cả, cho tới khi consumer commit: đó là bài sau.</p>`,
 		CLI: []string{
 			Cli("kafka-console-consumer.sh", "--topic orders --group g1 --from-beginning --property print.partition=true --property print.offset=true --timeout-ms 5000") +
 				"   # chú ý: console consumer tự commit (enable.auto.commit=true)",
 		},
 		Confirm: []string{
-			"Vì sao auto.offset.reset chỉ có tác dụng với group chưa từng commit?",
+			"Group g1 đã commit P0 nhưng chưa commit P1. Consumer mới của g1 với latest sẽ bắt đầu đọc P0 và P1 từ đâu?",
 			"Service mới deploy với latest, nhưng producer đã gửi dữ liệu từ hôm qua. Dữ liệu đó đi đâu?",
 		},
 	},
@@ -260,7 +271,7 @@ và dùng khoá chính của bảng để bản ghi trùng không gây hại.</p
 		Question: "Thêm c2, rồi c3, rồi c4 vào cùng group g1 (topic có 3 partition). Mỗi lần thêm, partition được chia lại thế nào? " +
 			"c4 làm gì? Xoá c2 thì partition của nó đi đâu?",
 		Steps: []string{
-			"Tạo c2 (group g1, orders). Đợi vài giây, nhìn cột “partition” của từng consumer.",
+			"Tạo c2 (group g1, orders). Đợi vài giây, nhìn các chip P0/P1/P2 trên thẻ của từng consumer.",
 			"Tạo c3, rồi c4, cùng group g1.",
 			"Xoá c2 và nhìn partition của nó chuyển sang ai.",
 		},
@@ -302,6 +313,9 @@ kiểu eager như range, mọi member phải nhả <i>toàn bộ</i> partition t
 <code>cooperative-sticky</code> chỉ di chuyển những partition cần chuyển.</p>
 <p>Partition chuyển sang consumer khác thì consumer mới bắt đầu từ <b>committed offset</b>. Record mà chủ cũ đã poll nhưng chưa commit
 sẽ được đọc lại ở chủ mới.</p>
+<p>Consumer của lab (franz-go) vào group ngay khi được tạo, nên bạn thấy partition được chia mà chưa cần Poll. <code>KafkaConsumer</code>
+của Java chỉ vào group bên trong <code>poll()</code>; Spring gọi poll ngay khi khởi động nên trông giống nhau. Lab cũng đặt
+<code>group.initial.rebalance.delay.ms=0</code>; mặc định broker chờ 3 s trước lần chia đầu tiên của một group mới để gom member.</p>
 <p>Ở Java còn một luật nữa: consumer không gọi <code>poll()</code> trong <code>max.poll.interval.ms</code> (mặc định 5 phút) sẽ tự rời group.
 Lab không mô phỏng luật đó.</p>`,
 		CLI: []string{Cli("kafka-consumer-groups.sh", "--describe --group g1 --members --verbose")},
@@ -363,8 +377,12 @@ Service gap cũng làm vậy: group <code>gap-lab-tracking</code> đọc cùng t
 theo kịp thì nằm trong <b>ISR</b> (in-sync replicas).</p>
 <p>Khi broker chết, controller (KRaft) phải biết trước đã. Broker bị <code>kill</code> không kịp báo gì, nên controller chỉ phát hiện khi
 hết <code>broker.session.timeout.ms</code> (mặc định 9 s): lab đo được leader chuyển sau 8,7 s, và trong khoảng đó partition vẫn trỏ về
-leader đã chết. Broker tắt có trật tự (<code>docker stop</code>) tự báo trước và nhường leader: lab đo được khoảng 1 s. Leader mới luôn được
-chọn trong ISR.</p>
+leader đã chết. Broker tắt có trật tự (<code>docker stop</code>) tự báo trước và nhường leader: lab đo được khoảng 1 s. Leader mới được
+chọn trong ISR, vì <code>unclean.leader.election.enable=false</code> (mặc định); bật nó lên thì một replica tụt hậu cũng được làm leader,
+đổi lại có thể mất record đã xác nhận.</p>
+<p>Record gửi vào partition có leader vừa chết sẽ chờ cho tới khi có leader mới: lab đo được 10,0–10,3 s. Vì vậy producer của lab dùng
+<code>delivery.timeout.ms=20000</code>; với 10 s, lần gửi này đã bị báo timeout dù cluster vẫn còn đủ replica. Java mặc định 120 s. Nếu
+bạn đặt delivery timeout ngắn ở prod, một lần chuyển leader bình thường cũng thành lỗi gửi.</p>
 <p>Với <code>acks=all</code>, leader chỉ xác nhận khi mọi replica <i>trong ISR</i> đã có record. Ngay sau khi một follower bị kill, nó vẫn
 còn trong ISR, nên leader phải đợi nó cho tới khi ISR co lại: lab đo được các lần gửi bị treo 6,8–8,4 s. Sau đó ISR còn 2, vẫn ≥
 <code>min.insync.replicas=2</code>, nên ghi lại nhanh như thường. Để ý cột "đã gửi" của producer: thời gian của mỗi lần gửi nằm ở đó.</p>
@@ -382,7 +400,7 @@ sách replica) theo chu kỳ, mặc định 5 phút (<code>leader.imbalance.chec
 			"rồi gửi: có thành công không? Cái giá của acks=1 là gì?",
 		Steps: []string{
 			"Kill thêm một broker để chỉ còn 1 broker chạy. Đợi khoảng 10 giây cho leader chuyển xong.",
-			"Gửi 1 record bằng p1 (acks=all). Lần gửi sẽ treo tới hết delivery.timeout.ms (10 giây ở lab).",
+			"Gửi 1 record bằng p1 (acks=all). Lần gửi sẽ treo tới hết delivery.timeout.ms (20 giây ở lab).",
 			"Tạo p2: acks=1, bỏ chọn idempotence. Gửi 1 record bằng p2.",
 			"Start lại cả hai broker.",
 		},
@@ -402,17 +420,18 @@ sách replica) theo chu kỳ, mặc định 5 phút (<code>leader.imbalance.chec
 		Reveal: `<p><code>min.insync.replicas=2</code> nghĩa là: với <code>acks=all</code>, leader <b>từ chối ghi</b> khi ISR còn ít hơn 2. Log của broker
 ghi rõ: <code>NotEnoughReplicasException: The size of the current ISR Set(1) is insufficient to satisfy the min.isr requirement of 2</code>.
 Nhưng lỗi bạn nhận được lại là timeout ("records have timed out…"): producer coi <code>NOT_ENOUGH_REPLICAS</code> là lỗi tạm thời, thử lại
-liên tục (lab đếm được 75 lần trong log broker) cho tới hết <code>delivery.timeout.ms</code> (10 s ở lab, Java mặc định 120 s), rồi mới báo
+liên tục (lab đếm được 75 lần trong 10 s ở log broker) cho tới hết <code>delivery.timeout.ms</code> (20 s ở lab, Java mặc định 120 s), rồi mới báo
 lỗi cho code. Java client cũng báo <code>TimeoutException</code> trong trường hợp này. Khi điều tra sự cố, lý do thật nằm ở log broker và
 ở ISR, không nằm ở thông báo lỗi phía producer.</p>
-<p><code>acks=1</code> không quan tâm ISR: leader ghi vào log của chính nó là xác nhận (lab đo được 272 ms, trong khi acks=all đợi 10 s
-rồi thất bại). Ghi được, nhưng nếu leader chết trước khi
+<p><code>acks=1</code> không quan tâm ISR: leader ghi vào log của chính nó là xác nhận (lab đo được 272 ms, trong khi acks=all đợi hết
+delivery timeout rồi thất bại). Ghi được, nhưng nếu leader chết trước khi
 follower kịp sao chép, record <i>đã được xác nhận</i> sẽ mất. <code>acks=0</code> còn không chờ leader trả lời.</p>
 <p>Đây là đánh đổi giữa sẵn sàng (vẫn ghi được khi cluster yếu) và bền vững (đã xác nhận là không mất). Cấu hình phổ biến cho dữ liệu
 quan trọng: RF 3, <code>min.insync.replicas=2</code>, <code>acks=all</code>: chịu được 1 broker chết mà vẫn ghi, mất 2 broker thì
 thà dừng ghi còn hơn mất dữ liệu.</p>
-<p>Idempotence (<code>enable.idempotence=true</code>, mặc định từ Java client 3.0) đòi hỏi <code>acks=all</code>, nên muốn dùng
-<code>acks=1</code> phải tắt nó.</p>`,
+<p>Idempotence (<code>enable.idempotence=true</code>, mặc định từ Java client 3.0) đòi hỏi <code>acks=all</code>. Từ Java client 3.2, nếu bạn
+đặt <code>acks=1</code> mà không đặt <code>enable.idempotence</code>, client tự tắt idempotence; đặt <code>enable.idempotence=true</code> cùng
+<code>acks=1</code> thì client báo lỗi cấu hình. Lab làm theo kiểu thứ hai: bỏ chọn idempotence khi chọn acks=1.</p>`,
 		CLI: []string{
 			"docker kill lab-kafka-3",
 			"docker exec -it lab-kafka-1 /opt/kafka/bin/kafka-console-producer.sh --bootstrap-server kafka-1:9092 --topic orders --producer-property acks=1",

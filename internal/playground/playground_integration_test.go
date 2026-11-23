@@ -60,6 +60,9 @@ func TestCommitDecidesWhatANewMemberReads(t *testing.T) {
 	if err := m.AddConsumer("c1", group, topic, "earliest"); err != nil {
 		t.Fatal(err)
 	}
+	if err := m.Commit(ctx, "c1"); err == nil {
+		t.Fatal("a commit before any poll must say there is nothing to commit")
+	}
 	for _, r := range pollUntil(t, ctx, m, "c1", 3) {
 		if r.Redelivered {
 			t.Fatalf("first read flagged as redelivery: %+v", r)

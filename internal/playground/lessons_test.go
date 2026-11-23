@@ -99,3 +99,22 @@ func TestLessonsLatchDone(t *testing.T) {
 		t.Fatal("a passed lesson must stay done")
 	}
 }
+
+func TestLesson1NeedsTheReplicationLaterLessonsUse(t *testing.T) {
+	l := lesson(t, "1")
+	p := func(n int32, rf int) PartitionView {
+		reps := []int32{1, 2, 3}[:rf]
+		return PartitionView{Partition: n, Replicas: reps, ISR: reps, Start: 0, End: 3}
+	}
+	tv := topicWith(p(0, 1), p(1, 1), p(2, 1))
+	tv.MinISR = 1
+	// Lessons 7 and 8 kill brokers; with RF 1 they cannot pass, so lesson 1 must not let RF 1 through.
+	if ok, d := l.check(LessonInput{Topic: tv}); ok || !strings.Contains(d, "RF") {
+		t.Fatal(d)
+	}
+	tv = topicWith(p(0, 3), p(1, 3), p(2, 3))
+	tv.MinISR = 2
+	if ok, d := l.check(LessonInput{Topic: tv}); !ok {
+		t.Fatal(d)
+	}
+}

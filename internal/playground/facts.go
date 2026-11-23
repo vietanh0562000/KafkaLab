@@ -2,6 +2,7 @@ package playground
 
 import (
 	"sort"
+	"strings"
 	"sync"
 )
 
@@ -49,7 +50,8 @@ func (f *facts) recordSends(svs []SendView) {
 			f.flags[flagKey(sv.Topic, factAcksAllWithBrokerDown)] = true
 		}
 		if sv.BrokersDown >= 2 {
-			if !ok && sv.Acks == "all" {
+			// Only a replica shortage counts; a send failed by deleting its producer says nothing about acks.
+			if !ok && sv.Acks == "all" && (strings.Contains(sv.Err, "timed out") || strings.Contains(sv.Err, "NOT_ENOUGH_REPLICAS")) {
 				f.flags[flagKey(sv.Topic, factAcksAllRejected)] = true
 			}
 			if ok && sv.Acks != "all" {
@@ -57,6 +59,13 @@ func (f *facts) recordSends(svs []SendView) {
 			}
 		}
 	}
+}
+
+// reset clears history in place; the pointer is shared with readers that do not hold the manager's lock.
+func (f *facts) reset() {
+	f.mu.Lock()
+	f.flags, f.sends, f.groups = map[string]bool{}, newRing[SendView](200), map[string]map[string]bool{}
+	f.mu.Unlock()
 }
 
 func (f *facts) recordPoll(group, topic string, recs []RecordView) {

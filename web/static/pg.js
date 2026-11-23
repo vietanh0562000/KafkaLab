@@ -85,8 +85,9 @@ function App() {
         if (stop) return;
         // A source that fails while a broker is down keeps showing its last answer instead of vanishing.
         for (const k of ["topics", "brokers", "groups"]) {
-          if (s.errors && s.errors[k]) s[k] = lastGood.current[k] || [];
-          else lastGood.current[k] = s[k] || [];
+          const slot = k === "groups" ? `groups:${topicRef.current}` : k; // commit flags belong to one topic
+          if (s.errors && s.errors[k]) s[k] = lastGood.current[slot] || [];
+          else lastGood.current[slot] = s[k] || [];
         }
         setSt(s);
         setLive(true);
@@ -269,15 +270,14 @@ function Cluster({ st, topic, setTopic, act }) {
             : ""}
           ${topic && !isScenarioTopic(topic) && html`<button class="btn tiny danger" onClick=${del} title="xoá topic và mọi record trong đó">xoá</button>`}
           ${st.topic && html`<span class="chip">${st.topic.partitions.length} partition</span>
-            <span class="chip">RF ${(topics.find((t) => t.name === topic) || {}).rf || "?"}</span>
+            <span class="chip">RF ${st.topic.rf || "?"}</span>
             ${st.topic.minIsr > 0 && html`<span class="chip">min ISR ${st.topic.minIsr}</span>`}`}
           <span class="spacer grow"></span>
           <button class=${"btn" + (creating ? " on" : "")} onClick=${() => setCreating(!creating)}>＋ Topic mới</button>
         </div>
         ${creating && html`<${CreateTopic} act=${act} done=${(name) => { setCreating(false); setTopic(name); }} />`}
         ${errs.length > 0 && html`<div class="errs" title=${errs.map(([k, v]) => `${k}: ${v}`).join("\n")}>
-          ⚠ Có broker không trả lời, nên ${errs.map(([k]) => SOURCE[k] || k).join(", ")} đang hiện số liệu đọc được lần trước.
-          Rê chuột vào đây để xem lỗi gốc.</div>`}
+          ⚠ Có broker không trả lời: ${errs.map(([k]) => SOURCE[k] || k).join("; ")}. Rê chuột vào đây để xem lỗi gốc.</div>`}
         ${st.topic ? html`<${Lanes} st=${st} />`
           : topic ? html`<div class="muted">Đang đọc topic…</div>`
           : !creating && html`<div class="empty-state"><p>Sân chơi chưa có topic nào. Bài 1 bắt đầu bằng việc tạo topic <code>orders</code>.</p>
@@ -286,7 +286,12 @@ function Cluster({ st, topic, setTopic, act }) {
     </div>`;
 }
 
-const SOURCE = { topics: "danh sách topic", brokers: "trạng thái broker", groups: "committed offset của group", topic: "offset của partition" };
+const SOURCE = {
+  topics: "danh sách topic là bản đọc lần trước",
+  brokers: "trạng thái broker là bản đọc lần trước",
+  groups: "cờ commit của group là bản đọc lần trước",
+  topic: "chưa đọc được offset của một số partition (hiện “?”)",
+};
 
 function TopicSelect({ topics, value, onChange }) {
   const own = topics.filter((t) => !isScenarioTopic(t));
@@ -344,7 +349,8 @@ function CreateTopic({ act, done }) {
 }
 
 function Lanes({ st }) {
-  const brokerUp = Object.fromEntries((st.brokers || []).map((b) => [b.id, b.state === "running"]));
+  // Unknown docker state stays undefined, so nothing is drawn as dead without evidence.
+  const brokerUp = Object.fromEntries((st.brokers || []).map((b) => [b.id, b.state ? b.state === "running" : undefined]));
   const groups = st.groups || [];
   const consumers = (st.consumers || []).filter((c) => c.topic === st.topic.name);
   return html`
@@ -353,6 +359,8 @@ function Lanes({ st }) {
         <span><span class="replica leader">1</span> leader</span>
         <span><span class="replica">2</span> trong ISR</span>
         <span><span class="replica out">3</span> ngoài ISR</span>
+        <span><span class="replica dead-isr">2</span> đã tắt, vẫn trong ISR</span>
+        <span><span class="replica dead">3</span> đã tắt, ra khỏi ISR</span>
         <span><span class="mark commit">g1</span> committed offset của group</span>
         <span><span class="mark pos">c1</span> vị trí đọc của consumer (chưa commit)</span>
       </div>
@@ -401,8 +409,16 @@ function Lane({ p, up, groups, consumers }) {
         ${p.leader < 0 ? html`<span class="chip bad">không có leader</span>` : ""}
         ${p.replicas.map((r) => {
           const inIsr = p.isr.includes(r);
-          const cls = r === p.leader ? "replica leader" : !up[r] ? "replica dead" : inIsr ? "replica" : "replica out";
-          const title = `broker ${r}${r === p.leader ? " · leader" : ""}${inIsr ? " · trong ISR" : " · ngoài ISR"}${up[r] ? "" : " · đang tắt"}`;
+          const leader = r === p.leader;
+          // The window lesson 7 is about: a dead broker still listed as leader or still in the ISR.
+          const cls = up[r] === false
+            ? leader ? "replica leader dead-leader" : inIsr ? "replica dead-isr" : "replica dead"
+            : leader ? "replica leader" : inIsr ? "replica" : "replica out";
+          const state = up[r] === false
+            ? leader ? "đã tắt nhưng vẫn là leader: controller chưa chọn leader mới"
+              : inIsr ? "đã tắt nhưng vẫn trong ISR: acks=all phải đợi nó" : "đã tắt, đã bị loại khỏi ISR"
+            : leader ? "leader" : inIsr ? "trong ISR" : "ngoài ISR (đang đuổi theo leader)";
+          const title = `broker ${r} · ${state}`;
           return html`<span class=${cls} title=${title}>${r}</span>`;
         })}
         <span class="lane-meta">${known ? `start ${p.start} · end ${p.end} · ${total} record` : "offset: ? (leader không trả lời)"}</span>
@@ -435,17 +451,19 @@ function nextName(prefix, taken) {
 
 function Clients({ st, topic, act }) {
   if (!st) return null;
-  const topics = (st.topics || []).map((t) => t.name);
+  // Sends and consumers stay on playground topics; scenario topics feed the gap service.
+  const topics = (st.topics || []).map((t) => t.name).filter((t) => !isScenarioTopic(t));
+  const current = isScenarioTopic(topic) ? topics[0] || "" : topic;
   return html`
     <div>
       <div class="section">
         <h2>Producer</h2>
         <${AddProducer} act=${act} taken=${(st.producers || []).map((p) => p.name)} />
-        ${(st.producers || []).map((p) => html`<${Producer} key=${p.name} p=${p} topic=${topic} topics=${topics} act=${act} />`)}
+        ${(st.producers || []).map((p) => html`<${Producer} key=${p.name} p=${p} topic=${current} topics=${topics} act=${act} />`)}
       </div>
       <div class="section">
         <h2>Consumer</h2>
-        <${AddConsumer} act=${act} topic=${topic} topics=${topics} taken=${(st.consumers || []).map((c) => c.name)} />
+        <${AddConsumer} act=${act} topic=${current} topics=${topics} taken=${(st.consumers || []).map((c) => c.name)} />
         <${Groups} st=${st} act=${act} />
       </div>
     </div>`;
@@ -526,7 +544,7 @@ function AddConsumer({ act, topic, topics, taken }) {
       <label class="field">Tên<input placeholder=${name} value=${f.name} onInput=${(e) => setF({ ...f, name: e.target.value.trim() })} /></label>
       <label class="field">group.id<input value=${f.group} onInput=${(e) => setF({ ...f, group: e.target.value.trim() })} /></label>
       <label class="field">Topic<${TopicSelect} topics=${topics} value=${t} onChange=${(v) => setF({ ...f, topic: v })} /></label>
-      <label class="field" title="chỉ dùng khi group chưa commit offset nào">auto.offset.reset<select value=${f.reset} onChange=${(e) => setF({ ...f, reset: e.target.value })}>
+      <label class="field" title="dùng cho partition mà group chưa commit, hoặc có offset đã commit không còn trong log">auto.offset.reset<select value=${f.reset} onChange=${(e) => setF({ ...f, reset: e.target.value })}>
         <option value="earliest">earliest</option><option value="latest">latest</option></select></label>
       <button class="btn primary" disabled=${!t}>＋ Tạo consumer</button>
     </form>`;
