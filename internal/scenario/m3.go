@@ -90,10 +90,10 @@ func dbDown() Scenario {
 				return s.DBRows == int64(produced), fmt.Sprintf("produce %d, DB %d", produced, s.DBRows)
 			}),
 		},
-		Reveal: `<p>Lỗi kết nối DB được xếp loại <b>retryable</b> (<code>DefaultExceptionClassifier</code>): lỗi tạm thời, thử lại có thể
+		Reveal: `<p>Lỗi kết nối DB được xếp vào loại <b>retryable</b> (<code>DefaultExceptionClassifier</code>): lỗi tạm thời, thử lại có thể
 thành công. Service thử lại batch 2 lần ngay trên listener thread, cách nhau 1 s (<code>BatchRetryErrorHandler.retryLoop</code>).</p>
-<p>Hết lượt thử, service <b>seek</b> consumer về đầu batch, <b>không commit</b> offset, và <b>pause</b> container
-(<code>PipelineRecoverer.recover</code>). Batch không bị bỏ, không vào DLQ: nó vẫn nằm trên Kafka và sẽ được đọc lại.</p>
+<p>Hết lượt thử, service <b>seek</b> consumer về đầu batch, <b>không commit</b> offset, và <b>pause</b> listener container
+(container của Spring Kafka, không phải container Docker; <code>PipelineRecoverer.recover</code>). Batch không bị bỏ, không vào DLQ: nó vẫn nằm trên Kafka và sẽ được đọc lại.</p>
 <p>Sau mỗi lần pause, service tự resume và thử lại (RECOVERING). Thất bại thì pause lâu gấp đôi:
 <b>lab 10 → 20 → 40 → 60 s</b>, <b>prod 30 → 60 → 120 → 240 → 300 s</b>. Lag tăng dần trong lúc DB chết, vì producer vẫn ghi
 vào Kafka. Đó chính là việc của Kafka: làm vùng đệm giữa bên ghi và bên đọc.</p>
@@ -102,7 +102,7 @@ vào Kafka. Đó chính là việc của Kafka: làm vùng đệm giữa bên gh
 nên mỗi lần tạo kết nối đều hỏng ngay (unknown host); dù vậy HikariCP vẫn chờ hết connection-timeout mới báo lỗi, vì pool tiếp tục thử
 tạo kết nối mới trong suốt khoảng đó.</p>
 <p>Có một ràng buộc ngầm: toàn bộ thời gian thử lại trên listener thread phải nhỏ hơn <code>max.poll.interval.ms</code> (300 s). Nếu
-vượt quá, broker coi consumer đã chết và rebalance, chồng thêm một sự cố lên sự cố ban đầu. Thời gian đó ≈ (retries + 1) × thời gian một lần
+vượt quá, consumer bị coi là đã chết và group rebalance, chồng thêm một sự cố lên sự cố ban đầu. Thời gian đó ≈ (retries + 1) × thời gian một lần
 thử + retries × backoff. Lúc khởi động, service chỉ kiểm tra phần retries × backoff (<code>PipelineWiring.java</code>) và bỏ qua thời gian
 mỗi lần thử: ở prod với <code>max-retries=9</code>, phép kiểm tra thấy 9 s và cho qua, trong khi thực tế mất khoảng 10 × 30 s + 9 s ≈ 309 s.</p>`,
 		JavaProps: []string{"max.poll.interval.ms=300000", "pipelines.error-handling.batch-retry.max-retries=2",
@@ -110,7 +110,7 @@ mỗi lần thử: ở prod với <code>max-retries=9</code>, phép kiểm tra t
 			"pipelines.error-handling.max-pause-duration-ms=60000 (prod 300000)"},
 		CLI: []string{cliDescribeGroup + "   # CURRENT-OFFSET đứng yên, LAG tăng trong lúc DB chết"},
 		Confirm: []string{
-			"Vì sao service không commit offset khi pause mà vẫn không mất data dù pod restart giữa chừng?",
+			"Service không commit offset khi pause. Vì sao chính điều đó giúp không mất data nếu pod restart giữa chừng?",
 			"Nếu tăng max-retries lên 400 thì điều gì sẽ hỏng trước?",
 			"DB chết 2 tiếng ở prod: lag lên tới đâu, và bạn cần kiểm tra cấu hình nào của topic để chắc data chưa bị xoá?",
 		},
@@ -178,7 +178,7 @@ func poisonPill() Scenario {
 				seen := c.Vars["ownerStates"].(map[string]bool)
 				return !seen["RUNNING"], fmt.Sprintf("RUNNING xuất hiện: %v", seen["RUNNING"])
 			}),
-			Expect("Offset của partition chứa poison không vượt qua poison", func(s observe.Snapshot, c *Ctx) (bool, string) {
+			Expect("Committed offset của partition chứa poison không vượt qua poison", func(s observe.Snapshot, c *Ctx) (bool, string) {
 				p, off := c.Vars["poisonPartition"].(int32), c.Vars["poisonOffset"].(int64)
 				for _, l := range s.Group.Lags {
 					if l.Partition == p {
@@ -204,11 +204,11 @@ từ chối với SQLState <code>22001</code>. Service xếp mọi SQLState <cod
 thử lại cũng không bao giờ thành công.</p>
 <p>Lỗi xảy ra ở mức <b>batch</b>: cả batch được ghi bằng một lệnh COPY. Service có tìm ra dòng hỏng
 (<code>AbstractBulkInsertDao.identifyOffendingRecords</code> thử lại từng record mà không ghi gì, rồi log record gây lỗi), nhưng kết quả đó
-chỉ để ghi log: error handler làm việc trên cả batch, nên cả batch bị giữ lại. Không có DLQ
-(<code>pipelines.error-handling.dlq.enabled=false</code> là mặc định), nên service làm điều duy nhất còn lại để không mất data:
-seek về đầu batch, không commit, pause, rồi resume, đọc lại đúng batch đó, hỏng lại, pause lâu hơn… mãi mãi.</p>
-<p>Phạm vi ảnh hưởng là <b>mọi partition của consumer đó</b>, không chỉ một record hay một partition: container bị pause dừng
-cả các partition khác nó đang giữ. Instance còn lại vẫn chạy, nên sensor rơi vào partition của nó không bị ảnh hưởng. Restart pod không
+chỉ để ghi log: error handler làm việc trên cả batch, nên cả batch bị giữ lại.</p>
+<p>Không có DLQ (<code>pipelines.error-handling.dlq.enabled=false</code> là mặc định), nên service làm điều duy nhất còn lại để không mất
+data: seek về đầu batch, không commit, pause, rồi resume, đọc lại đúng batch đó, hỏng lại, pause lâu hơn… mãi mãi.</p>
+<p>Phạm vi ảnh hưởng là <b>mọi partition của consumer đó</b>, không chỉ một record hay một partition: listener container bị pause thì dừng
+cả các partition khác nó đang giữ. Instance còn lại vẫn chạy, nên những sensor nằm ở partition do instance đó giữ không bị ảnh hưởng. Restart pod không
 giúp gì: offset chưa commit, nên pod mới đọc lại đúng batch đó.</p>
 <p>So với 3.4: JSON hỏng thì bị drop và commit (mất lặng lẽ). Record <i>parse được</i> nhưng không ghi được mới là thứ làm kẹt pipeline.</p>`,
 		JavaProps: []string{"pipelines.error-handling.dlq.enabled=false (mặc định)",
@@ -247,17 +247,17 @@ không tìm được dòng hỏng (service có log nó, xem 3.2), mà vì error 
 giản hơn, đổi lại record tốt bị kéo theo. Sau khi DLQ xác nhận đã ghi, offset được commit và pipeline chạy tiếp.</p>
 <p>Mỗi record trong DLQ giữ nguyên key, payload và header gốc, thêm <code>x-original-partition</code> /
 <code>x-original-offset</code>, nên có thể replay có chọn lọc: bỏ poison, gửi lại phần còn lại.</p>
-<p>Chỉ batch hỏng vì <b>dữ liệu</b> (non-retryable) mới vào DLQ. Batch hỏng vì <b>DB chết</b> (retry hết lượt) không bị chuyển,
-nếu không thì một sự cố hạ tầng sẽ đổ hết data tốt vào DLQ (<code>route-retry-exhausted=false</code>).</p>
+<p>Chỉ batch hỏng vì <b>dữ liệu</b> (non-retryable) mới vào DLQ. Batch hỏng vì <b>DB chết</b> (retry hết lượt) không bị chuyển sang DLQ;
+nếu bị chuyển, một sự cố hạ tầng sẽ đổ hết data tốt vào DLQ (<code>route-retry-exhausted=false</code>).</p>
 <p>Cái giá: record replay đến <b>sau</b> những record mới hơn của cùng sensor, nên thứ tự theo key bị phá. Với bảng lưu theo
-<code>(permanent_id, start_time)</code> thì không sao, nhưng mọi xử lý kiểu "giá trị mới nhất thắng" sẽ sai. Và DLQ chỉ có ích khi
-có người theo dõi và có công cụ replay; nếu không, nó chỉ là nơi data chết một cách gọn gàng hơn.</p>`,
+<code>(permanent_id, start_time)</code> thì không sao, nhưng mọi xử lý kiểu "giá trị mới nhất thắng" sẽ sai.</p>
+<p>DLQ chỉ có ích khi có người theo dõi và có công cụ replay; nếu không, nó chỉ là nơi data chết một cách gọn gàng hơn.</p>`,
 		JavaProps: []string{"pipelines.error-handling.dlq.enabled=true", "pipelines.error-handling.dlq.topic-prefix=dlq-",
 			"pipelines.error-handling.dlq.route-retry-exhausted=false", "pipelines.error-handling.dlq.publish-timeout-ms=10000"},
 		CLI: []string{cli("kafka-console-consumer.sh", "--topic dlq-lab.short-term --from-beginning --property print.headers=true --property print.key=true --max-messages 3")},
 		Confirm: []string{
 			"Nếu replay luôn cả record poison thì chuyện gì xảy ra?",
-			"Thứ tự theo sensor sau khi replay còn đúng không, và điều đó quan trọng với loại bảng nào?",
+			"Một bảng khác chỉ giữ giá trị mới nhất của mỗi sensor. Replay DLQ xong, bảng đó sai ở đâu, và bạn phát hiện bằng cách nào?",
 			"Ai sẽ biết là DLQ vừa nhận record? Bạn sẽ đặt alert trên con số nào?",
 		},
 	}
@@ -322,7 +322,7 @@ func malformed() Scenario {
 			Expect("101 row: 100 tốt + record có field lạ", func(s observe.Snapshot, _ *Ctx) (bool, string) {
 				return s.DBRows == 101, fmt.Sprintf("DB %d", s.DBRows)
 			}),
-			Expect("Mỗi record hỏng chỉ để lại đúng 1 counter", func(s observe.Snapshot, c *Ctx) (bool, string) {
+			Expect("Ba record hỏng tăng ba counter khác nhau, mỗi counter +1", func(s observe.Snapshot, c *Ctx) (bool, string) {
 				before := c.Vars["before"].(observe.Instance)
 				in, _ := instance(s, "lab-gap-svc-1")
 				drop := in.FilteredDrop - before.FilteredDrop
@@ -337,13 +337,13 @@ func malformed() Scenario {
 		},
 		Reveal: `<p>Bốn record lạ đi bốn đường khác nhau, nhưng không đường nào làm kẹt pipeline:</p>
 <ul>
-<li><b>Thiếu <code>intervalLength</code></b>: <code>IntervalFilter</code> lọc theo byte <code>"intervalLength":"PT1M"</code>
-<i>trước khi</i> parse, nên record bị loại ngay. Dấu vết: <code>records_filtered_total{result="drop"}</code> và một dòng log.</li>
+<li><b>Thiếu <code>intervalLength</code></b>: <code>IntervalFilter</code> tìm chuỗi byte <code>"intervalLength":"PT1M"</code> trong record
+<i>trước khi</i> parse; không thấy thì loại record ngay. Dấu vết: <code>records_filtered_total{result="drop"}</code> và một dòng log.</li>
 <li><b>JSON hỏng</b> (nhưng có chuỗi intervalLength): qua filter, hỏng ở Jackson. Dấu vết:
 <code>records_failed_total{error_type="deserialization_error"}</code>.</li>
 <li><b>Đổi tên field</b> <code>permanentId → permanentID</code>: Jackson phân biệt hoa thường, nên <code>permanentId</code> thành null. Dấu vết:
 <code>records_failed_total{error_type="missing_required_fields"}</code>.</li>
-<li><b>Thêm field lạ</b>: được bỏ qua (<code>FAIL_ON_UNKNOWN_PROPERTIES=false</code>, <code>JacksonConfiguration.java</code>),
+<li><b>Thêm field lạ</b>: field đó bị bỏ qua (<code>FAIL_ON_UNKNOWN_PROPERTIES=false</code>, <code>JacksonConfiguration.java</code>),
 record vào DB bình thường.</li>
 </ul>
 <p>Ba record hỏng đều bị <b>drop và commit</b>: không retry, không DLQ, chỉ còn một counter và một dòng log. Đối lập với 3.2: lỗi lúc

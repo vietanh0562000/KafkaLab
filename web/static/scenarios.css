@@ -1,0 +1,94 @@
+/* Scenarios page: layout only. Tokens and shared components are in ui.css. */
+
+:root {
+  --col-nav: 260px;
+  --col-live: 600px;
+  --scn-pad: 32px;
+}
+
+body.scn { display: grid; grid-template-rows: 48px minmax(0, 1fr); height: 100vh; }
+.scn main { display: grid; grid-template-columns: var(--col-nav) minmax(0, 1fr) var(--col-live); min-height: 0; }
+
+/* Scenario list ---------------------------------------------------------- */
+.scn-nav { overflow-y: auto; padding: var(--sp-4) var(--sp-3); background: var(--surface); border-right: 1px solid var(--line); }
+.scn-nav h4 { margin: var(--sp-5) var(--sp-2) var(--sp-1); font-size: var(--fs-xs); font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); }
+.scn-nav h4:first-child { margin-top: 0; }
+.scn-nav a { display: block; padding: 6px var(--sp-2); border-radius: var(--r); color: var(--ink-2); font-size: var(--fs-md); line-height: 1.35; text-decoration: none; }
+.scn-nav a:hover { background: var(--surface-3); color: var(--ink); }
+.scn-nav a[aria-current] { background: var(--primary-soft); color: var(--primary-ink); font-weight: 600; }
+.scn-nav .soon { margin: var(--sp-5) var(--sp-2) 0; font-size: var(--fs-sm); line-height: 1.45; color: var(--muted); }
+
+/* Scenario --------------------------------------------------------------- */
+#center { overflow-y: auto; padding: var(--sp-6) var(--scn-pad) var(--sp-8); background: var(--surface); }
+/* About 65 characters of prose per line at the prose size. */
+.scn-view { max-width: calc(var(--fs-prose) * 31); margin: 0 auto; }
+.scn-title { margin: 0 0 var(--sp-6); font-size: var(--fs-h1); line-height: 1.25; font-weight: 600; letter-spacing: -0.02em; color: var(--ink); }
+.scn-view textarea { margin-top: var(--sp-3); }
+.runbar { display: flex; align-items: center; flex-wrap: wrap; gap: var(--sp-3); margin-bottom: var(--sp-3); }
+.runbar .status-text { font-size: var(--fs-md); color: var(--muted); }
+.runbar .status-text.pass { color: var(--ok); font-weight: 500; }
+.runbar .status-text.fail { color: var(--bad); font-weight: 500; }
+.reveal-gate { display: flex; align-items: center; flex-wrap: wrap; gap: var(--sp-3); }
+.codeblock { margin: 0; padding: var(--sp-3); border: 1px solid var(--line); border-radius: var(--r); background: var(--surface-2); font: var(--fs-sm)/1.55 var(--mono); color: var(--ink-2); white-space: pre-wrap; word-break: break-all; }
+.form-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--sp-3); margin-bottom: var(--sp-4); }
+.form-grid .check { align-self: end; height: var(--h-md); }
+.panel-b { padding: var(--sp-4); }
+.scn-view .panel + .panel { margin-top: var(--sp-4); }
+#containers-ctl td:last-child { white-space: normal; padding-top: 4px; padding-bottom: 4px; }
+#containers-ctl .btn + .btn { margin-left: 4px; }
+
+/* Live panel ------------------------------------------------------------- */
+#live { overflow-y: auto; padding: var(--sp-4) var(--sp-5) var(--sp-6); background: var(--surface); border-left: 1px solid var(--line); }
+.live-h { display: flex; align-items: center; gap: var(--sp-2); margin: 0 0 var(--sp-3); font-size: var(--fs-lg); font-weight: 600; }
+.live-h .n { width: 22px; height: 22px; border-radius: 50%; background: var(--surface-3); color: var(--ink-2); display: grid; place-items: center; font: 600 var(--fs-xs)/1 var(--sans); }
+#live h3 { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin: var(--sp-5) 0 var(--sp-2); font-size: var(--fs-md); font-weight: 600; }
+#live h3 code { font-weight: 500; }
+#errors:not(:empty) { margin-bottom: var(--sp-3); padding: var(--sp-2) var(--sp-3); border-radius: var(--r); background: var(--bad-soft); color: var(--bad); font-size: var(--fs-sm); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 var(--sp-2); border: 1px solid var(--line); border-radius: var(--r-full); font: var(--fs-xs) var(--mono); color: var(--ink-2); }
+.chip::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--faint); }
+.chip.st-running::before { background: var(--ok); }
+.chip.st-paused::before { background: var(--warn); }
+.chip.st-exited::before, .chip.st-dead::before { background: var(--bad); }
+/* The dot carries a healthy state; only a container in trouble also colours its name. */
+.chips .chip.st-running { color: var(--ink-2); }
+.pill { display: inline-flex; align-items: center; height: 20px; padding: 0 7px; border-radius: var(--r-full); background: var(--surface-3); font-size: var(--fs-xs); font-weight: 500; }
+.st-running, .s-RUNNING, .s-Stable { color: var(--ok); }
+.st-paused, .s-RECOVERING, .s-PreparingRebalance, .s-CompletingRebalance { color: var(--warn); }
+.st-exited, .st-dead, .s-PAUSED, .s-Dead, .s-Empty { color: var(--bad); }
+.lag-hot { color: var(--bad); font-weight: 600; }
+#tracking { margin: var(--sp-2) 0 0; }
+#live .metrics { margin-top: var(--sp-5); }
+.log { list-style: none; margin: 0; padding: 0; max-height: 280px; overflow-y: auto; font-size: var(--fs-sm); line-height: 1.5; }
+.log li { padding: 3px 0; border-bottom: 1px solid var(--line); color: var(--ink-2); word-break: break-word; }
+.log time { margin-right: var(--sp-2); color: var(--muted); font-variant-numeric: tabular-nums; }
+
+/* Responsive ------------------------------------------------------------- */
+@media (max-width: 1679px) {
+  :root { --col-nav: 240px; --col-live: 560px; --scn-pad: 28px; }
+}
+@media (max-width: 1359px) {
+  :root { --col-nav: 220px; --col-live: 460px; --scn-pad: 24px; }
+}
+/* Half screen: the list becomes a strip so the scenario and the live panel keep their width. */
+@media (max-width: 1179px) {
+  :root { --col-live: 440px; --scn-pad: 20px; }
+  .scn main { grid-template-columns: minmax(0, 1fr) var(--col-live); grid-template-rows: auto minmax(0, 1fr); }
+  .scn-nav { grid-column: 1 / -1; display: flex; align-items: center; gap: var(--sp-1); padding: 6px var(--sp-3); overflow-x: auto; scrollbar-width: thin; border-right: 0; border-bottom: 1px solid var(--line); }
+  #live { padding-left: var(--sp-4); padding-right: var(--sp-4); }
+  #live .table th, #live .table td { padding: 0 6px; }
+  .scn-nav h4, .scn-nav .soon { display: none; }
+  .scn-nav a { flex: none; white-space: nowrap; }
+}
+@media (max-width: 899px) {
+  body.scn { height: auto; min-height: 100vh; }
+  .scn main { grid-template-columns: minmax(0, 1fr); }
+  #center, #live { overflow: visible; }
+  #live { border-left: 0; border-top: 1px solid var(--line); }
+}
+@media (max-width: 640px) {
+  .top { gap: var(--sp-2); padding: 0 10px; }
+  .brand > span:last-child, .status > span:last-child, .top .lbl { display: none; }
+  .sections > a { padding: 0 var(--sp-2); }
+  .form-grid { grid-template-columns: 1fr 1fr; }
+}

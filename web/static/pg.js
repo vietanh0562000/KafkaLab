@@ -63,10 +63,55 @@ const Icon = ({ name, size = 14 }) => html`
   <svg class="i" width=${size} height=${size} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[name].map((d) => html`<path d=${d} />`)}</svg>`;
 
+// One request at a time per control group: its buttons show which one runs and cannot be pressed twice.
+function useAction(act) {
+  const [s, setS] = useState({ busy: "", err: "" });
+  const running = useRef("");
+  const run = async (key, label, method, path, body, describe) => {
+    if (running.current) return null;
+    running.current = key;
+    setS({ busy: key, err: "" });
+    let err = "";
+    const res = await act(label, method, path, body, describe, (m) => { err = m; });
+    running.current = "";
+    setS({ busy: "", err });
+    return res;
+  };
+  return { ...s, run };
+}
+
+const Lead = ({ busy, icon, size = 13 }) => (busy ? html`<span class="spin"></span>` : icon ? html`<${Icon} name=${icon} size=${size} />` : null);
+const Err = ({ msg }) => msg ? html`<div class="inline-err" role="alert"><${Icon} name="alert" size=${13} /><span>${msg}</span></div>` : null;
+
+// Actions that lose data arm on the first press and run on the second; they disarm after 4 s, on blur or on Esc.
+function ConfirmButton({ cls, icon, label, armedLabel, title, ariaLabel, busy, disabled, onConfirm }) {
+  const [armed, setArmed] = useState(false);
+  useEffect(() => {
+    if (!armed) return undefined;
+    const t = setTimeout(() => setArmed(false), 4000);
+    return () => clearTimeout(t);
+  }, [armed]);
+  const press = () => {
+    if (!armed) { setArmed(true); return; }
+    setArmed(false);
+    onConfirm();
+  };
+  return html`<button class=${cls + (armed ? " armed" : "")} disabled=${disabled || busy} aria-busy=${busy ? "true" : undefined}
+    title=${title} aria-label=${armed ? armedLabel : ariaLabel || label} onClick=${press} onBlur=${() => setArmed(false)}
+    onKeyDown=${(e) => { if (e.key === "Escape") setArmed(false); }}>
+    <${Lead} busy=${busy} icon=${icon} />${armed ? html`<span>${armedLabel}</span>` : label && html`<span class="lbl">${label}</span>`}</button>`;
+}
+
 // ---------------------------------------------------------------- app
 
+const MODES = ["lessons", "free"];
+
 function App() {
-  const [mode, setMode] = useState(store.get("pg-mode", "lessons"));
+  // The scenarios page links here with #lessons or #free; otherwise the page reopens where the learner left it.
+  const [mode, setMode] = useState(() => {
+    const h = location.hash.slice(1);
+    return MODES.includes(h) ? h : store.get("pg-mode", "lessons");
+  });
   const [lessons, setLessons] = useState([]);
   const [lessonId, setLessonId] = useState(store.get("pg-lesson", "1"));
   const [topic, setTopic] = useState(() => {
@@ -84,8 +129,8 @@ function App() {
   const note = (text, err = false) => setLog((l) => [{ id: Date.now() + Math.random(), t: clock(), text, err }, ...l].slice(0, 100));
 
   // act runs one user action, logs it and shows the equivalent CLI command the server sent back;
-  // describe, when given, turns the response into the log line.
-  const act = async (label, method, path, body, describe) => {
+  // describe, when given, turns the response into the log line; onErr shows a failure next to the control.
+  const act = async (label, method, path, body, describe, onErr) => {
     try {
       const res = await api(method, path, body);
       if (res.cli) setCli(res.cli);
@@ -94,6 +139,7 @@ function App() {
       return res;
     } catch (e) {
       note(`${label}: ${e.message}`, true);
+      if (onErr) onErr(e.message);
       return null;
     }
   };
@@ -126,7 +172,10 @@ function App() {
     return () => { stop = true; clearTimeout(timer); };
   }, []);
 
-  useEffect(() => { store.set("pg-mode", mode); }, [mode]);
+  useEffect(() => {
+    store.set("pg-mode", mode);
+    if (location.hash !== `#${mode}`) history.replaceState(null, "", `#${mode}`);
+  }, [mode]);
   useEffect(() => { store.set("pg-lesson", lessonId); }, [lessonId]);
   // A scenario topic is a one-off look; it is not where the playground reopens.
   useEffect(() => { if (!isScenarioTopic(topic)) store.set("pg-topic", topic); poke(); }, [topic]);
@@ -147,8 +196,10 @@ function App() {
       <main class=${mode}>
         ${mode === "lessons" && html`<aside class="col lesson"><${Safe} name="bài học"><${LessonPanel} lessons=${lessons}
           statuses=${(st && st.lessons) || []} id=${lessonId} setId=${setLessonId} /><//></aside>`}
-        <section class="col stage"><${Safe} name="cluster"><${Stage} ...${ctx} /><//></section>
-        <aside class="col side"><${Safe} name="producer/consumer"><${Clients} ...${ctx} /><//></aside>
+        <div class="work">
+          <section class="col stage"><${Safe} name="cluster"><${Stage} ...${ctx} /><//></section>
+          <aside class="col side"><${Safe} name="producer/consumer"><${Clients} ...${ctx} /><//></aside>
+        </div>
       </main>
       <${Console} cli=${cli} log=${log} />
     </div>`;
@@ -165,24 +216,24 @@ function Safe({ name, children }) {
 }
 
 function Header({ mode, setMode, live, act }) {
+  const a = useAction(act);
   const clear = () => {
-    if (confirm("Đóng mọi producer/consumer, xoá các topic và group của sân chơi, và xoá tiến độ bài học?")) {
-      store.set("pg-done", "");
-      act("dọn sân chơi", "POST", "/api/pg/clear");
-    }
+    store.set("pg-done", "");
+    a.run("clear", "dọn sân chơi", "POST", "/api/pg/clear");
   };
+  const cur = (m) => (mode === m ? "page" : undefined);
   return html`
     <header class="top">
       <div class="brand"><span class="mark"><${Icon} name="layers" size=${14} /></span><span>Kafka Lab</span></div>
-      <nav class="seg-ctl" aria-label="Chế độ">
-        <button class=${mode === "lessons" ? "on" : ""} aria-pressed=${mode === "lessons"} onClick=${() => setMode("lessons")}>Bài học</button>
-        <button class=${mode === "free" ? "on" : ""} aria-pressed=${mode === "free"} onClick=${() => setMode("free")}>Sân chơi</button>
+      <nav class="sections" aria-label="Phần">
+        <button aria-current=${cur("lessons")} onClick=${() => setMode("lessons")}>Bài học</button>
+        <button aria-current=${cur("free")} onClick=${() => setMode("free")}>Sân chơi</button>
+        <a href="classic.html" title="Kịch bản chạy với service gap thật">Kịch bản</a>
       </nav>
       <span class="spacer"></span>
-      <a class="ext" href="classic.html#free" title="Các kịch bản chạy với service gap thật"><span>Kịch bản nâng cao</span><${Icon} name="ext" size=${13} /></a>
       <span class="status" role="status"><span class=${"dot " + (live ? "ok" : "bad")}></span><span>${live ? "Đang cập nhật" : "Mất kết nối với lab"}</span></span>
-      <button class="btn sm danger" onClick=${clear} aria-label="Dọn sân chơi" title="Xoá topic, group, client của sân chơi và tiến độ bài học">
-        <${Icon} name="eraser" size=${13} /><span class="lbl">Dọn sân chơi</span></button>
+      <${ConfirmButton} cls="btn sm ghost" icon="eraser" label="Dọn sân chơi" armedLabel="Bấm lần nữa để xoá hết"
+        title="Đóng mọi producer/consumer, xoá topic và group của sân chơi, và xoá tiến độ bài học" busy=${a.busy === "clear"} onConfirm=${clear} />
     </header>`;
 }
 
@@ -247,14 +298,14 @@ function LessonPanel({ lessons, statuses: live, id, setId }) {
         <button class="btn icon sm" disabled=${idx === 0} onClick=${() => go(idx - 1)} aria-label="Bài trước"><${Icon} name="left" /></button>
         <button class="btn icon sm" disabled=${idx === lessons.length - 1} onClick=${() => go(idx + 1)} aria-label="Bài sau"><${Icon} name="right" /></button>
       </div>
-      <div class="steps-bar" role="tablist" aria-label="Các bài học">
+      <nav class="stepper" aria-label="Các bài học">
         ${lessons.map((x, i) => {
           const d = status[x.id] && status[x.id].done;
-          return html`<button role="tab" aria-selected=${i === idx} class=${(d ? "done" : "") + (i === idx ? " cur" : "")}
-            title=${`Bài ${x.id}: ${x.title}${d ? " (đã xong)" : ""}`} onClick=${() => go(i)}>
-            ${d ? html`<${Icon} name="check" size=${12} />` : x.id}</button>`;
+          const name = `Bài ${x.id}: ${x.title}${d ? " (đã xong)" : ""}`;
+          return html`<button class=${d ? "done" : ""} aria-current=${i === idx ? "step" : undefined} title=${name} aria-label=${name}
+            onClick=${() => go(i)}>${x.id}${d && html`<span class="tick"><${Icon} name="check" size=${10} /></span>`}</button>`;
         })}
-      </div>
+      </nav>
     </div>
     <${Lesson} key=${l.id} l=${l} s=${status[l.id]} />`;
 }
@@ -266,36 +317,42 @@ function Lesson({ l, s }) {
   const done = s && s.done;
   const open = done || peek;
   const toReveal = () => { setPeek(true); setTimeout(() => revealRef.current && revealRef.current.scrollIntoView({ behavior: "smooth", block: "start" }), 0); };
+  // The learning loop: each step is done once its evidence exists; the first one not done is where the learner is.
+  const loop = [["Dự đoán", Boolean(guess.trim())], ["Làm", Boolean(done)], ["Quan sát", Boolean(done)], ["Giải thích", open]];
+  const cur = loop.findIndex(([, d]) => !d);
   return html`
     <div class="lesson-body">
       <h1 class="lesson-title">${l.title}</h1>
+      <ol class="loop" aria-label="Vòng học">
+        ${loop.map(([name, d], i) => html`<li class=${d ? "done" : i === cur ? "cur" : ""} aria-current=${i === cur ? "step" : undefined}>${name}</li>`)}
+      </ol>
       <section class="block">
         <h2 class="block-h"><span class="n">1</span>Dự đoán</h2>
-        <p class="question">${l.question}</p>
+        <p class="prose">${l.question}</p>
         <textarea aria-label="Dự đoán của bạn" placeholder="Ghi dự đoán trước khi làm. Chỉ lưu trên máy này." value=${guess}
           onInput=${(e) => { setGuess(e.target.value); store.set(`pg-predict-${l.id}`, e.target.value); }}></textarea>
       </section>
       <section class="block">
         <h2 class="block-h"><span class="n">2</span>Làm</h2>
-        <ol class="todo">${l.steps.map((x) => html`<li>${x}</li>`)}</ol>
+        <ol class="todo prose">${l.steps.map((x) => html`<li>${x}</li>`)}</ol>
       </section>
       <section class="block" ref=${revealRef}>
-        <h2 class="block-h"><span class="n">3</span>Giải thích</h2>
+        <h2 class="block-h"><span class="n">4</span>Giải thích</h2>
         ${open
           ? html`
-            ${guess && html`<p class="your-guess">Bạn đã đoán: “${guess}”. Đúng chỗ nào, sai chỗ nào?</p>`}
-            <div class="reveal" dangerouslySetInnerHTML=${{ __html: l.reveal }}></div>
+            ${guess && html`<p class="quote">Bạn đã đoán: “${guess}”. Đúng chỗ nào, sai chỗ nào?</p>`}
+            <div class="reveal prose" dangerouslySetInnerHTML=${{ __html: l.reveal }}></div>
             <div class="sub-h">Lệnh tương đương</div>
             ${l.cli.map((c) => html`<${Cli} text=${c} />`)}
             <div class="sub-h">Tự kiểm tra (không có đáp án)</div>
-            <ul class="confirm">${l.confirm.map((q) => html`<li>${q}</li>`)}</ul>`
+            <ul class="confirm prose">${l.confirm.map((q) => html`<li>${q}</li>`)}</ul>`
           : html`<div class="locked"><${Icon} name="lock" size=${13} />Mở khi bạn đạt mục tiêu.
               <button class="linkbtn" onClick=${toReveal}>Xem luôn</button></div>`}
       </section>
     </div>
     <div class=${"goal" + (done ? " done" : "")} role="status">
       <div class="goal-h">
-        ${done ? html`<${Icon} name="check" size=${13} />Đạt mục tiêu` : html`<span class="pulse"></span>Mục tiêu · lab đang theo dõi`}
+        ${done ? html`<${Icon} name="check" size=${13} />3 · Quan sát: đạt mục tiêu` : html`<span class="pulse"></span>3 · Quan sát: lab đang theo dõi`}
         <span class="spacer"></span>
         ${done && !peek && html`<button class="btn sm" onClick=${toReveal}>Đọc giải thích</button>`}
       </div>
@@ -315,20 +372,19 @@ const SOURCE = {
 
 function Stage({ st, topic, setTopic, act }) {
   const [creating, setCreating] = useState(false);
+  const a = useAction(act);
   if (!st) return html`<div class="panel empty-state">Đang kết nối tới lab…</div>`;
   const topics = st.topics || [];
   const own = topics.filter((t) => !isScenarioTopic(t.name));
   const errs = Object.entries(st.errors || {}).filter(([k]) => k !== "lessonTopic");
-  const del = () => {
-    if (confirm(`Xoá topic ${topic}? Mọi record trong đó sẽ mất.`)) act(`xoá topic ${topic}`, "DELETE", `/api/pg/topics/${encodeURIComponent(topic)}`);
-  };
+  const del = () => a.run("del", `xoá topic ${topic}`, "DELETE", `/api/pg/topics/${encodeURIComponent(topic)}`);
   const tv = st.topic;
   return html`
     <div class="panel">
       <div class="panel-h"><span class="panel-t">Cluster</span><span class="panel-sub">3 broker · KRaft controller</span></div>
       <${Brokers} st=${st} act=${act} />
     </div>
-    <div class="panel">
+    <div class="panel topic-panel">
       <div class="panel-h">
         ${own.length > 0 || topic
           ? html`<${TopicSelect} cls="select topic" topics=${topics.map((t) => t.name)} value=${topic} onChange=${setTopic} />`
@@ -336,9 +392,11 @@ function Stage({ st, topic, setTopic, act }) {
         ${tv && html`<div class="meta"><span><b>${tv.partitions.length}</b> partition</span><span>RF <b>${tv.rf || "?"}</b></span>
           ${tv.minIsr > 0 && html`<span class="rf-extra">min ISR <b>${tv.minIsr}</b></span>`}</div>`}
         <span class="spacer"></span>
-        ${topic && !isScenarioTopic(topic) && html`<button class="btn icon danger" onClick=${del} aria-label=${`Xoá topic ${topic}`} title="Xoá topic"><${Icon} name="trash" /></button>`}
-        <button class=${"btn" + (creating ? " on" : "")} onClick=${() => setCreating(!creating)}><${Icon} name="plus" />Topic mới</button>
+        ${topic && !isScenarioTopic(topic) && html`<${ConfirmButton} cls="btn icon danger" icon="trash" ariaLabel=${`Xoá topic ${topic}`}
+          armedLabel=${`Xoá ${topic}? Mọi record sẽ mất`} title="Xoá topic" busy=${a.busy === "del"} onConfirm=${del} />`}
+        <button class=${"btn" + (creating ? " on" : "")} aria-expanded=${creating} onClick=${() => setCreating(!creating)}><${Icon} name="plus" />Topic mới</button>
       </div>
+      ${a.err && html`<div class="panel-err"><${Err} msg=${a.err} /></div>`}
       ${creating && html`<${CreateTopic} act=${act} cancel=${() => setCreating(false)} done=${(name) => { setCreating(false); setTopic(name); }} />`}
       ${errs.length > 0 && html`<div class="banner" title=${errs.map(([k, v]) => `${k}: ${v}`).join("\n")}><${Icon} name="alert" />
         <span>Có broker không trả lời: ${errs.map(([k]) => SOURCE[k] || k).join("; ")}. Rê chuột để xem lỗi gốc.</span></div>`}
@@ -364,39 +422,48 @@ function Brokers({ st, act }) {
   for (const p of (st.topic && st.topic.partitions) || []) leads[p.leader] = (leads[p.leader] || 0) + 1;
   return html`
     <div class="brokers">
-      ${(st.brokers || []).map((b) => {
-        const up = b.state === "running";
-        // Killed but not yet fenced: the controller still lists it until broker.session.timeout.ms passes.
-        const limbo = !up && b.registered;
-        const cls = up ? "" : limbo ? " limbo" : " down";
-        const label = up ? (b.registered ? "Đang chạy" : "Đang khởi động, chưa đăng ký với controller")
-          : limbo ? "Đã tắt, nhưng controller vẫn tưởng còn sống" : `Đã tắt (${b.state || "?"})`;
-        const run = (verb) => act(`docker ${verb} ${b.container}`, "POST", "/api/chaos", { action: verb, target: b.container });
-        return html`
-          <div class=${"broker" + cls}>
-            <div class="row">
-              <span class=${"dot " + (up ? "ok" : limbo ? "warn" : "bad")}></span>
-              <span class="broker-name">Broker ${b.id}</span>
-              <span class="spacer"></span>
-              ${leads[b.id] ? html`<span class="badge" title="Số partition của topic đang xem mà broker này làm leader">leader ×${leads[b.id]}</span>` : ""}
-            </div>
-            <div class="broker-state">${label}</div>
-            <div class="btngroup">
-              <button class="btn sm danger" disabled=${!up} onClick=${() => run("kill")} title="Tắt đột ngột, như mất điện"><${Icon} name="zap" size=${12} />Kill</button>
-              <button class="btn sm" disabled=${!up} onClick=${() => run("stop")} title="Tắt có trật tự"><${Icon} name="stop" size=${11} />Stop</button>
-              <button class="btn sm" disabled=${up} onClick=${() => run("start")}><${Icon} name="play" size=${11} />Start</button>
-            </div>
-          </div>`;
-      })}
+      ${(st.brokers || []).map((b) => html`<${Broker} key=${b.id} b=${b} leads=${leads[b.id]} act=${act} />`)}
+    </div>`;
+}
+
+function Broker({ b, leads, act }) {
+  const a = useAction(act);
+  const up = b.state === "running";
+  // Killed but not yet fenced: the controller still lists it until broker.session.timeout.ms passes.
+  const limbo = !up && b.registered;
+  const cls = up ? "" : limbo ? " limbo" : " down";
+  const label = up ? (b.registered ? "Đang chạy" : "Đang khởi động, chưa đăng ký với controller")
+    : limbo ? "Đã tắt, nhưng controller vẫn tưởng còn sống" : `Đã tắt (${b.state || "?"})`;
+  const run = (verb) => a.run(verb, `docker ${verb} ${b.container}`, "POST", "/api/chaos", { action: verb, target: b.container });
+  const btn = (verb, text, icon, cls, disabled, title) => html`
+    <button class=${cls} disabled=${disabled || a.busy} aria-busy=${a.busy === verb ? "true" : undefined}
+      aria-label=${`${text} broker ${b.id}`} title=${title || text} onClick=${() => run(verb)}>
+      <${Lead} busy=${a.busy === verb} icon=${icon} size=${12} /><span class="lbl">${text}</span></button>`;
+  return html`
+    <div class=${"broker" + cls}>
+      <div class="broker-top">
+        <span class=${"dot " + (up ? "ok" : limbo ? "warn" : "bad")}></span>
+        <span class="broker-name">Broker ${b.id}</span>
+        <span class="spacer"></span>
+        ${leads ? html`<span class="badge" title="Số partition của topic đang xem mà broker này làm leader">leader ×${leads}</span>` : ""}
+      </div>
+      <div class="broker-state" key=${label}>${label}</div>
+      <div class="btngroup broker-actions">
+        ${btn("kill", "Kill", "zap", "btn sm danger", !up, "Tắt đột ngột, như mất điện")}
+        ${btn("stop", "Stop", "stop", "btn sm", !up, "Tắt có trật tự")}
+        ${btn("start", "Start", "play", up ? "btn sm" : "btn sm primary", up)}
+      </div>
+      <${Err} msg=${a.err} />
     </div>`;
 }
 
 function CreateTopic({ act, done, cancel }) {
   const [f, setF] = useState({ name: LESSON_TOPIC, partitions: 3, rf: 3, minIsr: 2 });
+  const a = useAction(act);
   const set = (k, num) => (e) => setF({ ...f, [k]: num ? Number(e.target.value) : e.target.value.trim() });
   const submit = async (e) => {
     e.preventDefault();
-    if (await act(`tạo topic ${f.name}`, "POST", "/api/pg/topics", f)) done(f.name);
+    if (await a.run("create", `tạo topic ${f.name}`, "POST", "/api/pg/topics", f)) done(f.name);
   };
   return html`
     <form class="create" onSubmit=${submit}>
@@ -405,7 +472,8 @@ function CreateTopic({ act, done, cancel }) {
       <label class="field">Replication factor<input type="number" min="1" max="3" value=${f.rf} onInput=${set("rf", true)} /></label>
       <label class="field">min.insync.replicas<input type="number" min="1" max=${f.rf} value=${f.minIsr} onInput=${set("minIsr", true)} /></label>
       <button type="button" class="btn" onClick=${cancel}>Huỷ</button>
-      <button class="btn primary">Tạo topic</button>
+      <button class="btn primary" disabled=${a.busy} aria-busy=${a.busy ? "true" : undefined}><${Lead} busy=${a.busy} />Tạo topic</button>
+      <${Err} msg=${a.err} />
     </form>`;
 }
 
@@ -500,7 +568,7 @@ function Partition({ p, up, groups, consumers }) {
                 <div class=${"cell" + (s.r.key ? "" : " nokey")} style=${s.r.key ? `--h:${hue(s.r.key)}` : ""}
                   title=${`P${p.partition} offset ${s.r.offset}\nkey: ${s.r.key || "(không có)"}\nvalue: ${s.r.value}`}>
                   <span class="off">${s.r.offset}</span>
-                  <span class="k">${s.r.key || "no key"}</span>
+                  <span class="k">${s.r.key || "không key"}</span>
                   <span class="v">${s.r.value}</span>
                 </div>`}
               ${(marks[s.at] || []).length > 0 && html`<div class="marks">${marks[s.at].map((m) => html`<span class=${"mark " + m.cls} title=${m.title}>${m.text}</span>`)}</div>`}
@@ -547,11 +615,12 @@ function AddProducer({ act, taken, close }) {
   const [acks, setAcks] = useState("all");
   const [idem, setIdem] = useState(true);
   const [custom, setCustom] = useState("");
+  const a = useAction(act);
   const name = nextName("p", taken);
   const submit = async (e) => {
     e.preventDefault();
     const n = custom || name;
-    const r = await act(`tạo producer ${n} (acks=${acks}, idempotence=${idem && acks === "all"})`, "POST", "/api/pg/producers",
+    const r = await a.run("create", `tạo producer ${n} (acks=${acks}, idempotence=${idem && acks === "all"})`, "POST", "/api/pg/producers",
       { name: n, acks, idempotent: idem && acks === "all" });
     if (r) { setCustom(""); close && close(); }
   };
@@ -562,11 +631,12 @@ function AddProducer({ act, taken, close }) {
         <label class="field">acks<select value=${acks} onChange=${(e) => setAcks(e.target.value)}>
           <option value="all">all</option><option value="1">1</option><option value="0">0</option></select></label>
         <label class="check full"><input type="checkbox" checked=${idem && acks === "all"} disabled=${acks !== "all"} onChange=${(e) => setIdem(e.target.checked)} />
-          <span><code>enable.idempotence</code> <span class="muted small">— chỉ dùng được với acks=all</span></span></label>
+          <span><code>enable.idempotence</code> <span class="muted small">(chỉ dùng được với acks=all)</span></span></label>
       </div>
+      <${Err} msg=${a.err} />
       <div class="actions">
         ${close && html`<button type="button" class="btn sm" onClick=${close}>Huỷ</button>`}
-        <button class="btn sm primary"><${Icon} name="plus" size=${13} />Tạo producer</button>
+        <button class="btn sm primary" disabled=${a.busy} aria-busy=${a.busy ? "true" : undefined}><${Lead} busy=${a.busy} icon="plus" />Tạo producer</button>
       </div>
     </form>`;
 }
@@ -578,9 +648,10 @@ function Producer({ p, topic, topics, act }) {
   const acks = prop("acks") || "all";
   const summary = [`acks=${acks}`, prop("enable.idempotence") === "true" ? "idempotent" : "không idempotent",
     prop("delivery.timeout.ms") && `${Number(prop("delivery.timeout.ms")) / 1000}s`].filter(Boolean).join(" · ");
+  const a = useAction(act);
   const send = (e) => {
     e.preventDefault();
-    act(`${p.name} gửi ${f.count} record vào ${t}${f.key ? ` (key ${f.key})` : " (không key)"}`, "POST",
+    a.run("send", `${p.name} gửi ${f.count} record vào ${t}${f.key ? ` (key ${f.key})` : " (không key)"}`, "POST",
       `/api/pg/producers/${encodeURIComponent(p.name)}/send`, { topic: t, key: f.key, value: f.value, count: f.count, acks });
   };
   const sends = [...(p.sends || [])].reverse().slice(0, 6);
@@ -590,24 +661,26 @@ function Producer({ p, topic, topics, act }) {
         <span class="item-name">${p.name}</span>
         <span class="item-sub" title=${p.javaProps.join("\n")}>${summary}</span>
         <span class="spacer"></span>
-        <button class="btn icon sm ghost danger" aria-label=${`Xoá producer ${p.name}`} title="Xoá producer"
-          onClick=${() => act(`xoá producer ${p.name}`, "DELETE", `/api/pg/producers/${encodeURIComponent(p.name)}`)}><${Icon} name="trash" size=${13} /></button>
+        <button class="btn icon sm ghost danger" aria-label=${`Xoá producer ${p.name}`} title="Xoá producer" disabled=${a.busy}
+          aria-busy=${a.busy === "del" ? "true" : undefined}
+          onClick=${() => a.run("del", `xoá producer ${p.name}`, "DELETE", `/api/pg/producers/${encodeURIComponent(p.name)}`)}><${Lead} busy=${a.busy === "del"} icon="trash" /></button>
       </div>
       <form class="item-b sendform" onSubmit=${send}>
         <label class="field">Key<input placeholder="không key" value=${f.key} onInput=${(e) => setF({ ...f, key: e.target.value })} /></label>
         <label class="field">Value<input value=${f.value} onInput=${(e) => setF({ ...f, value: e.target.value })} /></label>
         <label class="field">Số lượng<input type="number" min="1" max="1000" value=${f.count} onInput=${(e) => setF({ ...f, count: Number(e.target.value) })} /></label>
         <label class="field wide">Topic<${TopicSelect} topics=${topics} value=${t} onChange=${(v) => setF({ ...f, topic: v })} /></label>
-        <button class="btn primary" disabled=${!t}><${Icon} name="send" size=${13} />Gửi</button>
-        <div class="hint" style="grid-column:1/-1">Dùng <code>{i}</code> trong key hoặc value để đánh số 1, 2, 3… theo thứ tự record.</div>
+        <button class="btn primary" disabled=${!t || a.busy} aria-busy=${a.busy === "send" ? "true" : undefined}><${Lead} busy=${a.busy === "send"} icon="send" />Gửi</button>
+        <${Err} msg=${a.err} />
+        <div class="hint">Dùng <code>{i}</code> trong key hoặc value để đánh số 1, 2, 3… theo thứ tự record.</div>
       </form>
-      ${sends.length > 0 && html`<ul class="events item-b" style="margin-top:0" aria-label="Lần gửi gần nhất">
+      ${sends.length > 0 && html`<ul class="events sends" aria-label="Lần gửi gần nhất">
         ${sends.map((s) => html`<li key=${s.id}>
           ${s.pending
-            ? html`<span class="pending"><span class="spin"></span>${s.key || "no key"} đang chờ ack… ${ago(s.at).toFixed(1)} s</span>`
+            ? html`<span class="pending"><span class="spin"></span>${s.key || "không key"} đang chờ ack… ${ago(s.at).toFixed(1)} s</span>`
             : s.err
-              ? html`<span class="err"><${Icon} name="x" size=${12} /> ${s.key || "no key"}: ${s.err}</span><span class="t">${secs(s.tookMs)}</span>`
-              : html`<span>${s.key || "no key"}</span><span class="arrow">→</span><b>P${s.partition}</b><span class="muted">@${s.offset}</span>
+              ? html`<span class="err"><${Icon} name="x" size=${12} /> ${s.key || "không key"}: ${s.err}</span><span class="t">${secs(s.tookMs)}</span>`
+              : html`<span>${s.key || "không key"}</span><span class="arrow">→</span><b>P${s.partition}</b><span class="muted">@${s.offset}</span>
                   ${s.brokersDown > 0 ? html`<span class="badge warn">${s.brokersDown} broker tắt</span>` : ""}
                   <span class="t">${secs(s.tookMs)}</span>`}
         </li>`)}
@@ -618,11 +691,12 @@ function Producer({ p, topic, topics, act }) {
 function AddConsumer({ act, topic, topics, taken, close }) {
   const name = nextName("c", taken);
   const [f, setF] = useState({ name: "", group: "g1", topic: "", reset: "earliest" });
+  const a = useAction(act);
   const t = topics.includes(f.topic) ? f.topic : topic;
   const submit = async (e) => {
     e.preventDefault();
     const n = f.name || name;
-    const r = await act(`tạo consumer ${n} (group ${f.group}, ${t}, ${f.reset})`, "POST", "/api/pg/consumers",
+    const r = await a.run("create", `tạo consumer ${n} (group ${f.group}, ${t}, ${f.reset})`, "POST", "/api/pg/consumers",
       { name: n, group: f.group, topic: t, reset: f.reset });
     if (r) { setF({ ...f, name: "" }); close && close(); }
   };
@@ -636,9 +710,10 @@ function AddConsumer({ act, topic, topics, taken, close }) {
           <select value=${f.reset} onChange=${(e) => setF({ ...f, reset: e.target.value })}>
             <option value="earliest">earliest</option><option value="latest">latest</option></select></label>
       </div>
+      <${Err} msg=${a.err} />
       <div class="actions">
         ${close && html`<button type="button" class="btn sm" onClick=${close}>Huỷ</button>`}
-        <button class="btn sm primary" disabled=${!t}><${Icon} name="plus" size=${13} />Tạo consumer</button>
+        <button class="btn sm primary" disabled=${!t || a.busy} aria-busy=${a.busy ? "true" : undefined}><${Lead} busy=${a.busy} icon="plus" />Tạo consumer</button>
       </div>
     </form>`;
 }
@@ -667,18 +742,15 @@ function Groups({ st, act }) {
 }
 
 function Consumer({ c, act }) {
-  const [busy, setBusy] = useState(false);
+  const a = useAction(act);
   const path = `/api/pg/consumers/${encodeURIComponent(c.name)}`;
-  const poll = async () => {
-    setBusy(true);
-    await act(`${c.name} poll`, "POST", `${path}/poll`, { max: 10 }, (res) => {
-      const recs = res.data || [];
-      if (!recs.length) return `${c.name} poll: không nhận được record nào sau 3 s`;
-      const again = recs.filter((x) => x.redelivered).length;
-      return `${c.name} poll: nhận ${recs.length} record${again ? `, trong đó ${again} record đọc lại` : ""}`;
-    });
-    setBusy(false);
-  };
+  const poll = () => a.run("poll", `${c.name} poll`, "POST", `${path}/poll`, { max: 10 }, (res) => {
+    const recs = res.data || [];
+    if (!recs.length) return `${c.name} poll: không nhận được record nào sau 3 s`;
+    const again = recs.filter((x) => x.redelivered).length;
+    return `${c.name} poll: nhận ${recs.length} record${again ? `, trong đó ${again} record đọc lại` : ""}`;
+  });
+  const busy = (k) => (a.busy === k ? "true" : undefined);
   const recv = [...(c.received || [])].reverse().slice(0, 4);
   const positions = Object.entries(c.positions || {}).map(([p, o]) => `P${p}@${o}`).join(" ");
   const meta = [c.topic, c.reset, `${c.polls} poll`, positions && `đọc tới ${positions}`, c.redeliveries && `${c.redeliveries} đọc lại`].filter(Boolean).join(" · ");
@@ -690,22 +762,27 @@ function Consumer({ c, act }) {
           ? c.assigned.map((p) => html`<span class="badge primary mono">P${p}</span>`)
           : html`<span class="badge warn">chưa có partition</span>`}</span>
         <span class="spacer"></span>
-        <button class="btn icon sm ghost danger" aria-label=${`Xoá consumer ${c.name}`} title="Xoá consumer (rời group)"
-          onClick=${() => act(`xoá consumer ${c.name} (rời group ${c.group})`, "DELETE", path)}><${Icon} name="trash" size=${13} /></button>
+        <button class="btn icon sm ghost danger" aria-label=${`Xoá consumer ${c.name}`} title="Xoá consumer (rời group)" disabled=${a.busy}
+          aria-busy=${busy("del")} onClick=${() => a.run("del", `xoá consumer ${c.name} (rời group ${c.group})`, "DELETE", path)}>
+          <${Lead} busy=${a.busy === "del"} icon="trash" /></button>
       </div>
       <div class="consumer-meta">${meta}</div>
       <div class="consumer-actions">
-        <button class="btn sm primary" disabled=${busy || c.auto} onClick=${poll}>${busy ? html`<span class="spin"></span>Đang poll` : html`<${Icon} name="inbox" size=${13} />Poll`}</button>
-        <button class="btn sm" disabled=${c.auto} onClick=${() => act(`${c.name} commit`, "POST", `${path}/commit`)}><${Icon} name="check" size=${13} />Commit</button>
-        <button class=${"btn sm" + (c.auto ? " on" : "")} aria-pressed=${c.auto} title="Poll và commit liên tục, như một service"
-          onClick=${() => act(`${c.name} tự động: ${c.auto ? "tắt" : "bật"}`, "POST", `${path}/auto`, { on: !c.auto })}>
-          <${Icon} name="repeat" size=${13} />${c.auto ? "Đang tự động" : "Tự động"}</button>
+        <button class="btn sm primary" disabled=${a.busy || c.auto} aria-busy=${busy("poll")} onClick=${poll}>
+          <${Lead} busy=${a.busy === "poll"} icon="inbox" />${a.busy === "poll" ? "Đang poll" : "Poll"}</button>
+        <button class="btn sm" disabled=${a.busy || c.auto} aria-busy=${busy("commit")}
+          onClick=${() => a.run("commit", `${c.name} commit`, "POST", `${path}/commit`)}><${Lead} busy=${a.busy === "commit"} icon="check" />Commit</button>
+        <button class=${"btn sm" + (c.auto ? " on" : "")} aria-pressed=${c.auto} disabled=${a.busy} aria-busy=${busy("auto")}
+          title="Poll và commit liên tục, như một service"
+          onClick=${() => a.run("auto", `${c.name} tự động: ${c.auto ? "tắt" : "bật"}`, "POST", `${path}/auto`, { on: !c.auto })}>
+          <${Lead} busy=${a.busy === "auto"} icon="repeat" />${c.auto ? "Đang tự động" : "Tự động"}</button>
       </div>
+      ${a.err && html`<${Err} msg=${a.err} />`}
       ${c.err && html`<div class="consumer-err">${c.err}</div>`}
       ${recv.length > 0 && html`<ul class="events" aria-label="Record nhận gần nhất">
         ${recv.map((r) => html`<li key=${`${r.partition}-${r.offset}-${r.redelivered}`}>
-          <b>P${r.partition}</b><span class="muted">@${r.offset}</span><span>${r.key || "no key"}</span>
-          <span class="muted" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.value}</span>
+          <b>P${r.partition}</b><span class="muted">@${r.offset}</span><span>${r.key || "không key"}</span>
+          <span class="val">${r.value}</span>
           ${r.redelivered ? html`<span class="t"><span class="badge warn">đọc lại</span></span>` : ""}
         </li>`)}
       </ul>`}

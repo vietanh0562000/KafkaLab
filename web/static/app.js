@@ -13,6 +13,7 @@ const fmt = (n) => (n === undefined || n === null ? "–" : Number(n).toLocaleSt
 
 let scenarios = [];
 let current = null;
+let running = null;    // id of the scenario this page started and has not seen finish
 const steps = {};      // scenario id -> [{step, status, observed, err}]
 const finished = {};   // scenario id -> Result
 let lastContainers = "";
@@ -40,32 +41,39 @@ function log(text, at) {
 function renderNav() {
   const nav = $("nav");
   let html = "";
+  const soon = [];
   for (const [id, name] of MODULES) {
-    html += `<h4>${id} · ${esc(name)}</h4>`;
     const list = scenarios.filter((s) => s.module === id);
-    if (list.length === 0) html += `<div class="soon">sắp có</div>`;
+    if (list.length === 0) { soon.push(`${id} ${name}`); continue; }
+    html += `<h4>${id} · ${esc(name)}</h4>`;
     for (const s of list) html += `<a href="#sc/${esc(s.id)}" data-id="${esc(s.id)}">${esc(s.id)} ${esc(s.title)}</a>`;
   }
   html += `<h4>Khác</h4><a href="#free" data-view="free">Free play</a><a href="#gaps" data-view="gaps">Chưa cover (20%)</a>`;
+  if (soon.length) html += `<p class="soon">Sắp có: ${esc(soon.join(", "))}</p>`;
   nav.innerHTML = html;
 }
 
 function route() {
+  // Coming from the lessons page there is no hash: reopen the last scenario, or the first one.
+  if (!location.hash && scenarios.length) {
+    history.replaceState(null, "", load("scn-last") || `#sc/${scenarios[0].id}`);
+  }
   const h = location.hash.slice(1);
   for (const v of ["scenario", "free", "gaps"]) $("view-" + v).hidden = true;
-  document.querySelectorAll("nav a").forEach((a) => a.classList.remove("active"));
+  document.querySelectorAll("#nav a").forEach((a) => a.removeAttribute("aria-current"));
   if (h.startsWith("sc/")) {
     const id = h.slice(3);
     const s = scenarios.find((x) => x.id === id);
     if (s) {
       showScenario(s);
-      document.querySelector(`nav a[data-id="${CSS.escape(id)}"]`)?.classList.add("active");
+      store("scn-last", "#" + h);
+      document.querySelector(`#nav a[data-id="${CSS.escape(id)}"]`)?.setAttribute("aria-current", "page");
       return;
     }
   }
   const view = h === "gaps" ? "gaps" : "free";
   $("view-" + view).hidden = false;
-  document.querySelector(`nav a[data-view="${view}"]`)?.classList.add("active");
+  document.querySelector(`#nav a[data-view="${view}"]`)?.setAttribute("aria-current", "page");
 }
 
 // Scenario card
@@ -77,6 +85,7 @@ function showScenario(s) {
   $("sc-question").textContent = s.question;
   $("sc-guess").value = load("guess-" + s.id);
   $("sc-answer").hidden = true;
+  $("sc-gate").hidden = false;
   renderSteps();
   renderRunState();
 }
@@ -85,18 +94,28 @@ function renderSteps() {
   if (!current) return;
   $("sc-steps").innerHTML = (steps[current.id] || []).map((st) =>
     `<li class="${esc(st.status)}">${esc(st.step)}` +
-    (st.observed ? ` <span class="obs">— ${esc(st.observed)}</span>` : "") +
+    (st.observed ? `<div class="obs">${esc(st.observed)}</div>` : "") +
     (st.err ? `<div class="err">${esc(st.err)}</div>` : "") + `</li>`).join("");
 }
 
 function renderRunState() {
+  if (!current) return;
   const res = finished[current.id];
+  const btn = $("sc-run");
+  // The lab runs one scenario at a time; a second press would only come back as 409.
+  btn.disabled = Boolean(running);
+  btn.setAttribute("aria-busy", running === current.id ? "true" : "false");
+  btn.innerHTML = running === current.id ? `<span class="spin"></span>Đang chạy…` : "Chạy kịch bản";
   $("sc-reveal").disabled = !res;
-  $("sc-status").textContent = res ? (res.passed ? "Kịch bản PASS: hệ thống làm đúng như giải thích." : "Kịch bản FAIL: xem bước bị ✗.") : "";
+  const st = $("sc-status");
+  st.className = "status-text" + (res ? (res.passed ? " pass" : " fail") : "");
+  st.textContent = res ? (res.passed ? "PASS: hệ thống làm đúng như giải thích." : "FAIL: xem bước bị ✕.")
+    : running && running !== current.id ? `Kịch bản ${running} đang chạy.` : "";
 }
 
 function reveal() {
   const s = current;
+  $("sc-gate").hidden = true;
   $("sc-reveal-body").innerHTML = s.reveal;
   $("sc-props").textContent = (s.javaProps || []).join("\n") || "—";
   $("sc-cli").textContent = (s.cli || []).join("\n\n") || "—";
@@ -105,16 +124,19 @@ function reveal() {
 }
 
 async function runScenario() {
-  if (!current) return;
+  if (!current || running) return;
   const id = current.id;
   steps[id] = [];
   delete finished[id];
+  running = id;
   renderSteps();
   renderRunState();
   try {
     await api(`/api/scenarios/${encodeURIComponent(id)}/run`, { method: "POST", headers: JSON_HEADERS });
-    $("sc-status").textContent = "Đang chạy…";
   } catch (e) {
+    running = null;
+    renderRunState();
+    $("sc-status").className = "status-text fail";
     $("sc-status").textContent = e.message.startsWith("409") ? "Đang có kịch bản hoặc reset khác chạy." : e.message;
   }
 }
@@ -132,8 +154,9 @@ function onScenario(res) {
     return;
   }
   finished[res.id] = res;
+  if (running === res.id) running = null;
   log(`kịch bản ${res.id}: ${res.passed ? "PASS" : "FAIL"}`);
-  if (current && current.id === res.id) renderRunState();
+  renderRunState();
 }
 
 // Live panel
@@ -194,17 +217,35 @@ function renderControls(containers) {
   const actions = ["stop", "start", "kill", "pause", "unpause"];
   $("containers-ctl").innerHTML = Object.keys(containers).sort().map((n) => {
     const net = n.startsWith("lab-gap-svc") ? ["disconnect", "connect"] : [];
-    return `<tr><td>${esc(n)}</td><td class="st-${esc(containers[n])}">${esc(containers[n])}</td><td>` +
-      [...actions, ...net].map((a) => `<button class="small" data-action="${a}" data-target="${esc(n)}">${a}</button>`).join("") + `</td></tr>`;
+    return `<tr><td class="mono">${esc(n)}</td><td class="st-${esc(containers[n])}">${esc(containers[n])}</td><td>` +
+      [...actions, ...net].map((a) => `<button class="btn sm${a === "kill" ? " danger" : ""}" data-action="${a}" data-target="${esc(n)}">${a}</button>`).join("") + `</td></tr>`;
   }).join("");
 }
 
-async function chaos(action, target) {
+// busy disables a button while its request runs and shows a spinner in it.
+function busy(btn, on) {
+  if (!btn) return;
+  if (on) { btn.dataset.label = btn.innerHTML; btn.innerHTML = `<span class="spin"></span>${btn.innerHTML}`; }
+  else if (btn.dataset.label !== undefined) { btn.innerHTML = btn.dataset.label; delete btn.dataset.label; }
+  btn.disabled = on;
+  btn.setAttribute("aria-busy", on ? "true" : "false");
+}
+
+function showErr(id, msg) {
+  $(id).hidden = !msg;
+  $(id).textContent = msg || "";
+}
+
+async function chaos(action, target, btn) {
+  busy(btn, true);
+  showErr("ctl-err", "");
   try {
     await api("/api/chaos", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action, target }) });
   } catch (e) {
     log(`chaos ${action} ${target} lỗi: ${e.message}`);
+    showErr("ctl-err", `${action} ${target}: ${e.message}`);
   }
+  busy(btn, false);
 }
 
 async function produce(form) {
@@ -213,11 +254,34 @@ async function produce(form) {
     count: +f.get("count"), sensors: +f.get("sensors"), ratePerSec: +f.get("ratePerSec"),
     acks: f.get("acks"), idempotent: f.get("idempotent") === "on", poisonEvery: +f.get("poisonEvery"),
   };
+  busy($("produce-btn"), true);
+  showErr("produce-err", "");
   try {
     await api("/api/produce", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
   } catch (e) {
     log(`produce lỗi: ${e.message}`);
+    showErr("produce-err", e.message);
   }
+  busy($("produce-btn"), false);
+}
+
+// Actions that lose data arm on the first press and run on the second; they disarm after 4 s, on blur or on Esc.
+function confirmTwice(btn, armedText, action) {
+  const label = btn.innerHTML;
+  let timer = 0;
+  const disarm = () => { clearTimeout(timer); btn.classList.remove("armed"); btn.innerHTML = label; };
+  btn.onclick = () => {
+    if (!btn.classList.contains("armed")) {
+      btn.classList.add("armed");
+      btn.textContent = armedText;
+      timer = setTimeout(disarm, 4000);
+      return;
+    }
+    disarm();
+    action();
+  };
+  btn.onblur = disarm;
+  btn.onkeydown = (e) => { if (e.key === "Escape") disarm(); };
 }
 
 // Wiring
@@ -235,8 +299,8 @@ async function loadScenarios() {
 function connect() {
   const es = new EventSource("/api/events");
   // A reconnect usually means lab-control restarted, possibly with new scenarios.
-  es.onopen = () => { $("conn").textContent = "live"; $("conn").className = "pill s-RUNNING"; loadScenarios(); };
-  es.onerror = () => { $("conn").textContent = "mất kết nối, đang thử lại…"; $("conn").className = "pill s-PAUSED"; };
+  es.onopen = () => { $("conn").textContent = "Đang cập nhật"; $("conn-dot").className = "dot ok"; loadScenarios(); };
+  es.onerror = () => { $("conn").textContent = "Mất kết nối, đang thử lại…"; $("conn-dot").className = "dot bad"; };
   es.addEventListener("snapshot", (e) => renderLive(JSON.parse(e.data).data));
   es.addEventListener("log", (e) => { const ev = JSON.parse(e.data); log(ev.data, ev.at); });
   es.addEventListener("step", (e) => onStep(JSON.parse(e.data).data));
@@ -248,13 +312,16 @@ async function init() {
   $("sc-reveal").onclick = reveal;
   $("sc-skip").onclick = (e) => { e.preventDefault(); reveal(); };
   $("sc-guess").oninput = (e) => current && store("guess-" + current.id, e.target.value);
-  $("reset-btn").onclick = async () => {
+  // Reset recreates the topics and truncates the table, so it is confirmed like any other data loss.
+  confirmTwice($("reset-btn"), "Bấm lần nữa để reset", async () => {
+    busy($("reset-btn"), true);
     try { await api("/api/reset", { method: "POST", headers: JSON_HEADERS }); log("reset bắt đầu…"); }
     catch (e) { log(e.message.startsWith("409") ? "đang có kịch bản chạy, chưa reset được" : e.message); }
-  };
+    busy($("reset-btn"), false);
+  });
   $("containers-ctl").onclick = (e) => {
     const b = e.target.closest("button[data-action]");
-    if (b) chaos(b.dataset.action, b.dataset.target);
+    if (b && !b.disabled) chaos(b.dataset.action, b.dataset.target, b);
   };
   $("produce").onsubmit = (e) => { e.preventDefault(); produce(e.target); };
   window.onhashchange = route;

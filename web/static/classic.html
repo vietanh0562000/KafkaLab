@@ -3,95 +3,117 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Kafka Lab</title>
+  <title>Kafka Lab · Kịch bản</title>
   <link rel="icon" href="data:,">
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="ui.css">
+  <link rel="stylesheet" href="scenarios.css">
 </head>
-<body>
-<header>
-  <h1>Kafka Lab</h1>
-  <a class="back" href="./">← Bài học &amp; sân chơi</a>
-  <span id="conn" class="pill">đang kết nối…</span>
+<body class="scn">
+<header class="top">
+  <div class="brand"><span class="mark"><svg class="i" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+    stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 2 10 5-10 5L2 7z"/><path d="m2 17 10 5 10-5"/><path d="m2 12 10 5 10-5"/></svg></span><span>Kafka Lab</span></div>
+  <nav class="sections" aria-label="Phần">
+    <a href="./#lessons">Bài học</a>
+    <a href="./#free">Sân chơi</a>
+    <a href="classic.html" aria-current="page" title="Kịch bản chạy với service gap thật">Kịch bản</a>
+  </nav>
   <span class="spacer"></span>
-  <button id="reset-btn" title="Đưa lab về trạng thái chuẩn: 3 broker, DB, 2 instance, topic trống">Reset baseline</button>
+  <span class="status" role="status"><span id="conn-dot" class="dot"></span><span id="conn">Đang kết nối…</span></span>
+  <button id="reset-btn" class="btn sm ghost" title="Đưa lab về trạng thái chuẩn: 3 broker, DB, 2 instance, topic trống"><span class="lbl">Reset baseline</span></button>
 </header>
 <main>
-  <nav id="nav"></nav>
+  <nav id="nav" class="scn-nav" aria-label="Kịch bản"></nav>
 
   <section id="center">
-    <div id="view-scenario" hidden>
-      <h2 id="sc-title"></h2>
-      <div class="box predict">
-        <h3>Dự đoán trước khi chạy</h3>
-        <p id="sc-question"></p>
-        <textarea id="sc-guess" rows="3" placeholder="Ghi dự đoán của bạn (chỉ lưu trên máy này)…"></textarea>
-      </div>
-      <div class="row">
-        <button id="sc-run" class="primary">Chạy kịch bản</button>
-        <span id="sc-status" class="muted"></span>
-      </div>
-      <ol id="sc-steps" class="steps"></ol>
-      <div class="row">
-        <button id="sc-reveal" disabled>Xem giải thích</button>
-        <a href="#" id="sc-skip" class="muted small">bỏ qua, xem luôn</a>
-      </div>
-      <div id="sc-answer" hidden>
-        <div class="box reveal" id="sc-reveal-body"></div>
-        <h3>Java properties liên quan</h3>
-        <pre id="sc-props"></pre>
-        <h3>Lệnh CLI tương đương (dùng ở prod)</h3>
-        <pre id="sc-cli"></pre>
-        <h3>Tự kiểm tra (không có đáp án)</h3>
-        <ol id="sc-confirm"></ol>
-      </div>
-    </div>
-
-    <div id="view-free" hidden>
-      <h2>Free play</h2>
-      <form id="produce" class="box">
-        <h3>Produce</h3>
-        <div class="grid-form">
-          <label>Số record <input name="count" type="number" value="1000" min="1"></label>
-          <label>Số sensor (key) <input name="sensors" type="number" value="100" min="1"></label>
-          <label>Rate/s (0 = burst) <input name="ratePerSec" type="number" value="0" min="0"></label>
-          <label>acks <select name="acks"><option>all</option><option>1</option><option>0</option></select></label>
-          <label class="check"><input name="idempotent" type="checkbox" checked> enable.idempotence</label>
-          <label>Poison mỗi N record (0 = không) <input name="poisonEvery" type="number" value="0" min="0"></label>
+    <div id="view-scenario" class="scn-view" hidden>
+      <h1 id="sc-title" class="scn-title"></h1>
+      <section class="block">
+        <h2 class="block-h"><span class="n">1</span>Dự đoán</h2>
+        <p id="sc-question" class="prose"></p>
+        <textarea id="sc-guess" rows="3" aria-label="Dự đoán của bạn" placeholder="Ghi dự đoán trước khi chạy. Chỉ lưu trên máy này."></textarea>
+      </section>
+      <section class="block">
+        <h2 class="block-h"><span class="n">2</span>Làm</h2>
+        <div class="runbar">
+          <button id="sc-run" class="btn primary">Chạy kịch bản</button>
+          <span id="sc-status" class="status-text" role="status"></span>
         </div>
-        <button class="primary">Gửi</button>
-        <p class="muted small">idempotence=true bắt buộc acks=all, giống Java client.</p>
+        <ol id="sc-steps" class="runsteps"></ol>
+      </section>
+      <section class="block">
+        <h2 class="block-h"><span class="n">4</span>Giải thích</h2>
+        <div id="sc-gate" class="reveal-gate">
+          <button id="sc-reveal" class="btn" disabled>Xem giải thích</button>
+          <button id="sc-skip" class="linkbtn">bỏ qua, xem luôn</button>
+        </div>
+        <div id="sc-answer" hidden>
+          <div id="sc-reveal-body" class="prose"></div>
+          <div class="sub-h">Java properties liên quan</div>
+          <pre id="sc-props" class="codeblock"></pre>
+          <div class="sub-h">Lệnh CLI tương đương (dùng ở prod)</div>
+          <pre id="sc-cli" class="codeblock"></pre>
+          <div class="sub-h">Tự kiểm tra (không có đáp án)</div>
+          <ol id="sc-confirm" class="prose"></ol>
+        </div>
+      </section>
+    </div>
+
+    <div id="view-free" class="scn-view" hidden>
+      <h1 class="scn-title">Free play</h1>
+      <form id="produce" class="panel">
+        <div class="panel-h"><span class="panel-t">Produce</span><span class="panel-sub">vào <code>lab.short-term</code></span></div>
+        <div class="panel-b">
+          <div class="form-grid">
+            <label class="field">Số record<input name="count" type="number" value="1000" min="1"></label>
+            <label class="field">Số sensor (key)<input name="sensors" type="number" value="100" min="1"></label>
+            <label class="field">Rate/s (0 = burst)<input name="ratePerSec" type="number" value="0" min="0"></label>
+            <label class="field">acks<select name="acks"><option>all</option><option>1</option><option>0</option></select></label>
+            <label class="field">Poison mỗi N record (0 = không)<input name="poisonEvery" type="number" value="0" min="0"></label>
+            <label class="check"><input name="idempotent" type="checkbox" checked> <code>enable.idempotence</code></label>
+          </div>
+          <div class="row">
+            <button id="produce-btn" class="btn primary">Gửi</button>
+            <span class="hint">idempotence=true bắt buộc acks=all, giống Java client.</span>
+          </div>
+          <div id="produce-err" class="inline-err" role="alert" hidden></div>
+        </div>
       </form>
-      <div class="box">
-        <h3>Container</h3>
-        <table id="containers-ctl"></table>
+      <div class="panel">
+        <div class="panel-h"><span class="panel-t">Container</span></div>
+        <div class="panel-b">
+          <table id="containers-ctl" class="table"></table>
+          <div id="ctl-err" class="inline-err" role="alert" hidden></div>
+        </div>
       </div>
     </div>
 
-    <div id="view-gaps" hidden>
-      <h2>Chưa cover (khoảng 20% còn lại)</h2>
-      <ul>
-        <li>Bảo mật: SASL, SSL, ACL</li>
-        <li>Schema Registry, Avro, Protobuf</li>
-        <li>Kafka Connect, Kafka Streams, MirrorMaker</li>
-        <li>Consumer protocol mới (KIP-848), tiered storage, multi-DC</li>
-      </ul>
-      <p class="muted">Lab chỉ chạy local, một người dùng, không có auth.</p>
+    <div id="view-gaps" class="scn-view" hidden>
+      <h1 class="scn-title">Chưa cover (khoảng 20% còn lại)</h1>
+      <div class="prose">
+        <ul>
+          <li>Bảo mật: SASL, SSL, ACL</li>
+          <li>Schema Registry, Avro, Protobuf</li>
+          <li>Kafka Connect, Kafka Streams, MirrorMaker</li>
+          <li>Consumer protocol mới (KIP-848), tiered storage, multi-DC</li>
+        </ul>
+        <p class="muted">Lab chỉ chạy local, một người dùng, không có auth.</p>
+      </div>
     </div>
   </section>
 
   <aside id="live">
-    <h2>Live</h2>
+    <h2 class="live-h"><span class="n">3</span>Quan sát</h2>
     <div id="errors"></div>
     <div id="containers" class="chips"></div>
     <h3>Topic <code>lab.short-term</code> · group <code id="group-name"></code> <span id="group-state" class="pill"></span></h3>
-    <table id="partitions"></table>
+    <table id="partitions" class="table"></table>
     <p class="small muted" id="tracking"></p>
     <h3>Service instances</h3>
-    <table id="instances"></table>
-    <div class="stats">
-      <div><span id="db-rows">–</span><label>DB rows</label></div>
-      <div><span id="late-rows">–</span><label>late rows</label></div>
-      <div><span id="dlq-end">–</span><label>DLQ records</label></div>
+    <table id="instances" class="table"></table>
+    <div class="metrics">
+      <div><span class="label">DB rows</span><span class="value" id="db-rows">–</span></div>
+      <div><span class="label">late rows</span><span class="value" id="late-rows">–</span></div>
+      <div><span class="label">DLQ records</span><span class="value" id="dlq-end">–</span></div>
     </div>
     <h3>Event log</h3>
     <ol id="log" class="log"></ol>
