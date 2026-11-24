@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+
+<html lang="en"><head><meta charset="utf-8"/><meta content="width=device-width, initial-scale=1.0" name="viewport"/><meta content="web_standard" name="shell-type"/><link href="https://fonts.googleapis.com" rel="preconnect"/><link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500;600&amp;family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20,400,0,0" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<style>@layer base{html,body{margin:0;padding:0;background-color:#FAFAF7;}body{overscroll-behavior:none;}main>:first-child{margin-top:0!important;}main>:last-child{margin-bottom:0!important;}}::-webkit-scrollbar{display:none;}</style><script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script><script id="tailwind-config">tailwind.config={theme:{extend:{"colors":{"paper":"#FAFAF7","card":"#FFFFFF","border-subtle":"#E2E2DC","ink":"#252A35","ink-muted":"#6B7280","tech-blue":"#4269D8","tech-blue-tint":"#EAF0FF","alert-red":"#C65353","alert-red-tint":"#FDF2F2","warn-amber":"#B98132","warn-amber-tint":"#FEF9EE","health-green":"#2E7D32","health-green-tint":"#E8F5E9"},"borderRadius":{"DEFAULT":"0.125rem","lg":"0.25rem","xl":"0.5rem","full":"0.75rem"},"fontFamily":{"body":["Inter","sans-serif"],"mono":["JetBrains Mono","monospace"]}}}};</script></head><body class="bg-paper font-body text-ink antialiased min-h-screen flex flex-col"><header class="fixed top-0 w-full z-50 bg-card border-b border-border-subtle"><div class="h-14 w-full px-5 flex items-center justify-between gap-4"><div class="flex items-center gap-3 shrink-0"><svg class="w-6 h-6 text-tech-blue" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" viewbox="0 0 24 24"><polygon points="12 2 21 7 21 17 12 22 3 17 3 7 12 2"></polygon><polyline points="3 7 12 12 21 7"></polyline><line x1="12" x2="12" y1="22" y2="12"></line></svg><span class="font-semibold text-[17px] text-ink tracking-tight">KafkaLab</span><span class="px-2 py-0.5 rounded border border-border-subtle bg-paper font-mono text-[11px] text-ink-muted">v2.4 KRaft</span></div><nav class="hidden lg:flex items-center gap-1.5"><a class="px-3 py-1.5 rounded font-medium text-[13px] text-ink-muted hover:bg-paper hover:text-ink transition-colors" data-path="playground" href="#">Playground</a><a class="px-3 py-1.5 rounded font-medium text-[13px] text-ink-muted hover:bg-paper hover:text-ink transition-colors" data-path="lessons" href="#">Lessons</a><a aria-current="page" class="px-3 py-1.5 rounded font-medium text-[13px] bg-tech-blue-tint text-tech-blue border border-tech-blue/20" data-path="failure-scenarios" href="#">Failure Scenarios</a><a class="px-3 py-1.5 rounded font-medium text-[13px] text-ink-muted hover:bg-paper hover:text-ink transition-colors" data-path="live-dashboard" href="#">Live Dashboard</a><a class="px-3 py-1.5 rounded font-medium text-[13px] text-ink-muted hover:bg-paper hover:text-ink transition-colors" data-path="cli-console" href="#">CLI Console</a></nav><div class="flex items-center gap-3 shrink-0"><div class="hidden sm:flex items-center gap-2 px-2.5 py-1 rounded border border-health-green/30 bg-health-green-tint"><span class="w-2 h-2 rounded-full bg-health-green"></span><span class="font-mono text-[11px] font-medium text-health-green">3/3 Brokers Online</span></div><div class="hidden md:flex items-center rounded border border-border-subtle bg-paper p-0.5"><button class="px-2.5 py-1 rounded font-medium text-[11px] bg-card text-tech-blue shadow-none border border-border-subtle" type="button">Network</button><button class="px-2.5 py-1 rounded font-medium text-[11px] text-ink-muted hover:text-ink transition-colors" type="button">Sequence</button></div><button class="flex items-center gap-1.5 px-3 py-1.5 rounded border border-border-subtle bg-card text-ink font-medium text-[12px] hover:bg-paper hover:border-ink-muted/30 transition-colors" type="button"><span class="material-symbols-outlined text-[16px] text-ink-muted">pause</span><span>Pause</span></button><div class="w-8 h-8 rounded-full border border-border-subtle bg-paper flex items-center justify-center text-ink-muted"><span class="material-symbols-outlined text-[18px]">person</span></div></div></div></header><main class="w-full pt-14 bg-paper flex-1"><div class="flex flex-col w-full">
+<!-- Top Learning Loop Stepper & Scenario Header -->
+<section class="w-full px-6 py-4 bg-card border-b border-border-subtle">
+<div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+<!-- Scenario Context -->
+<div class="flex items-center gap-3.5 min-w-0">
+<div class="w-10 h-10 rounded border border-alert-red/30 bg-alert-red-tint flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-alert-red text-[20px]">dns</span>
+</div>
+<div class="min-w-0">
+<div class="flex items-center gap-2">
+<span class="font-mono uppercase tracking-wider text-[11px] font-semibold text-alert-red">Active Failure Scenario</span>
+<span class="px-2 py-0.5 rounded border border-border-subtle bg-paper font-mono text-[11px] text-ink-muted">KRaft Quorum</span>
+</div>
+<h1 class="text-[19px] font-semibold text-ink tracking-tight truncate">Replication Failure — Broker 2 Offline</h1>
+</div>
+</div>
+<!-- PREDICT -> RUN -> OBSERVE -> EXPLAIN Stepper -->
+<div class="flex items-center gap-1.5 bg-paper p-1.5 rounded-lg border border-border-subtle overflow-x-auto" id="learning-stepper">
+<button class="stepper-btn flex items-center gap-1.5 px-3 py-1.5 rounded bg-card border border-border-subtle text-health-green font-medium text-[12px] shrink-0" data-step="predict" type="button">
+<span class="material-symbols-outlined text-[16px]" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+<span>1. PREDICT</span>
+</button>
+<span class="material-symbols-outlined text-ink-muted/50 text-[16px] shrink-0">arrow_forward</span>
+<button class="stepper-btn flex items-center gap-1.5 px-3 py-1.5 rounded bg-card border border-border-subtle text-health-green font-medium text-[12px] shrink-0" data-step="run" type="button">
+<span class="material-symbols-outlined text-[16px]" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+<span>2. RUN</span>
+</button>
+<span class="material-symbols-outlined text-ink-muted/50 text-[16px] shrink-0">arrow_forward</span>
+<button class="stepper-btn flex items-center gap-1.5 px-3 py-1.5 rounded bg-tech-blue-tint border border-tech-blue/30 text-tech-blue font-semibold text-[12px] shrink-0" data-step="observe" type="button">
+<span class="material-symbols-outlined text-[16px]">visibility</span>
+<span>3. OBSERVE</span>
+</button>
+<span class="material-symbols-outlined text-ink-muted/50 text-[16px] shrink-0">arrow_forward</span>
+<button class="stepper-btn flex items-center gap-1.5 px-3 py-1.5 rounded bg-card border border-border-subtle text-ink-muted hover:text-ink font-medium text-[12px] transition-colors shrink-0" data-step="explain" type="button">
+<span class="material-symbols-outlined text-[16px]">psychology</span>
+<span>4. EXPLAIN</span>
+</button>
+</div>
+</div>
+</section>
+<!-- Main 3-Column Workbench -->
+<section class="w-full p-6 grid grid-cols-1 xl:grid-cols-12 gap-5 items-start">
+<!-- Left Column: Failure Scenarios List (3 cols) -->
+<aside class="xl:col-span-3 flex flex-col gap-2 bg-card p-4 rounded-lg border border-border-subtle">
+<div class="flex items-center justify-between px-1 pb-1">
+<span class="font-mono text-[11px] font-semibold uppercase tracking-wider text-ink-muted">Failure Scenarios</span>
+<span class="font-mono text-[11px] text-tech-blue font-medium">7 Modules</span>
+</div>
+<div class="flex flex-col gap-1.5" id="scenario-list">
+<button class="w-full flex items-center justify-between p-2.5 rounded bg-paper/60 border border-transparent hover:border-border-subtle hover:bg-paper text-left transition-colors group" type="button">
+<div class="flex items-center gap-2.5 min-w-0">
+<span class="material-symbols-outlined text-ink-muted group-hover:text-tech-blue text-[18px]">hourglass_bottom</span>
+<span class="text-[13px] text-ink font-medium truncate">Consumer Lag</span>
+</div>
+<span class="font-mono text-[11px] text-ink-muted">01</span>
+</button>
+<button class="w-full flex items-center justify-between p-2.5 rounded bg-paper/60 border border-transparent hover:border-border-subtle hover:bg-paper text-left transition-colors group" type="button">
+<div class="flex items-center gap-2.5 min-w-0">
+<span class="material-symbols-outlined text-ink-muted group-hover:text-tech-blue text-[18px]">database</span>
+<span class="text-[13px] text-ink font-medium truncate">Database Outage</span>
+</div>
+<span class="font-mono text-[11px] text-ink-muted">02</span>
+</button>
+<button class="w-full flex items-center justify-between p-2.5 rounded bg-paper/60 border border-transparent hover:border-border-subtle hover:bg-paper text-left transition-colors group" type="button">
+<div class="flex items-center gap-2.5 min-w-0">
+<span class="material-symbols-outlined text-ink-muted group-hover:text-tech-blue text-[18px]">bug_report</span>
+<span class="text-[13px] text-ink font-medium truncate">Poison Pill Messages</span>
+</div>
+<span class="font-mono text-[11px] text-ink-muted">03</span>
+</button>
+<button class="w-full flex items-center justify-between p-2.5 rounded bg-paper/60 border border-transparent hover:border-border-subtle hover:bg-paper text-left transition-colors group" type="button">
+<div class="flex items-center gap-2.5 min-w-0">
+<span class="material-symbols-outlined text-ink-muted group-hover:text-tech-blue text-[18px]">mark_email_unread</span>
+<span class="text-[13px] text-ink font-medium truncate">Dead Letter Queues</span>
+</div>
+<span class="font-mono text-[11px] text-ink-muted">04</span>
+</button>
+<button class="w-full flex items-center justify-between p-2.5 rounded bg-paper/60 border border-transparent hover:border-border-subtle hover:bg-paper text-left transition-colors group" type="button">
+<div class="flex items-center gap-2.5 min-w-0">
+<span class="material-symbols-outlined text-ink-muted group-hover:text-tech-blue text-[18px]">broken_image</span>
+<span class="text-[13px] text-ink font-medium truncate">Corrupted Data</span>
+</div>
+<span class="font-mono text-[11px] text-ink-muted">05</span>
+</button>
+<button class="w-full flex items-center justify-between p-2.5 rounded bg-paper/60 border border-transparent hover:border-border-subtle hover:bg-paper text-left transition-colors group" type="button">
+<div class="flex items-center gap-2.5 min-w-0">
+<span class="material-symbols-outlined text-ink-muted group-hover:text-tech-blue text-[18px]">schema</span>
+<span class="text-[13px] text-ink font-medium truncate">Schema Changes</span>
+</div>
+<span class="font-mono text-[11px] text-ink-muted">06</span>
+</button>
+<!-- Active Scenario -->
+<button class="w-full flex items-center justify-between p-2.5 rounded bg-tech-blue-tint border border-tech-blue/30 text-left" type="button">
+<div class="flex items-center gap-2.5 min-w-0">
+<span class="material-symbols-outlined text-alert-red text-[18px]" style="font-variation-settings: 'FILL' 1;">warning</span>
+<div class="min-w-0">
+<div class="text-[13px] font-semibold text-tech-blue truncate">Replication Failures</div>
+<div class="font-mono text-[11px] text-ink-muted truncate">Broker 2 Offline</div>
+</div>
+</div>
+<span class="w-2 h-2 rounded-full bg-alert-red shrink-0"></span>
+</button>
+</div>
+</aside>
+<!-- Center Column: Isometric 2.5D Whiteboard Diagram (6 cols) -->
+<div class="xl:col-span-6 flex flex-col gap-3 bg-card p-5 rounded-lg border border-border-subtle">
+<!-- Canvas Toolbar -->
+<div class="flex flex-wrap items-center justify-between gap-2">
+<div class="flex items-center gap-2.5">
+<span class="font-mono text-[11px] uppercase tracking-wider font-semibold text-ink-muted">Isometric Pipeline Schematic</span>
+<span class="px-2 py-0.5 rounded border border-warn-amber/30 bg-warn-amber-tint font-mono text-[11px] font-medium text-warn-amber" id="canvas-status-pill">Degraded Quorum</span>
+</div>
+<div class="flex items-center gap-3 font-mono text-[11px] text-ink-muted">
+<span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-health-green"></span>Healthy</span>
+<span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-warn-amber"></span>Under-Replicated</span>
+<span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-alert-red"></span>Offline</span>
+</div>
+</div>
+<!-- Isometric 2.5D SVG Whiteboard Canvas -->
+<div class="w-full rounded border border-border-subtle bg-card p-2 overflow-hidden">
+<svg aria-label="Kafka Isometric 2.5D Pipeline Diagram showing Broker 2 Offline" class="w-full h-auto" role="img" viewbox="0 0 760 440">
+<defs>
+<pattern height="23.09" id="isoGrid" patternunits="userSpaceOnUse" width="40">
+<path d="M 20 0 L 40 11.545 L 20 23.09 L 0 11.545 Z" fill="none" opacity="0.6" stroke="#E8E8E2" stroke-width="0.8"></path>
+</pattern>
+<marker id="arrowBlue" markerheight="6" markerwidth="6" orient="auto-start-reverse" refx="8" refy="5" viewbox="0 0 10 10">
+<path d="M 0 1 L 10 5 L 0 9 z" fill="#4269D8"></path>
+</marker>
+<marker id="arrowGreen" markerheight="6" markerwidth="6" orient="auto-start-reverse" refx="8" refy="5" viewbox="0 0 10 10">
+<path d="M 0 1 L 10 5 L 0 9 z" fill="#2E7D32"></path>
+</marker>
+<marker id="arrowRed" markerheight="6" markerwidth="6" orient="auto-start-reverse" refx="8" refy="5" viewbox="0 0 10 10">
+<path d="M 0 1 L 10 5 L 0 9 z" fill="#C65353"></path>
+</marker>
+</defs>
+<!-- Isometric Grid Background -->
+<rect fill="url(#isoGrid)" height="440" width="760"></rect>
+<!-- Producer Node (Left) -->
+<g transform="translate(36, 170)">
+<polygon fill="#FFFFFF" points="60,0 120,30 60,60 0,30" stroke="#4269D8" stroke-width="1.5"></polygon>
+<polygon fill="#F4F6FC" points="0,30 60,60 60,96 0,66" stroke="#4269D8" stroke-width="1.5"></polygon>
+<polygon fill="#EAF0FF" points="120,30 60,60 60,96 120,66" stroke="#4269D8" stroke-width="1.5"></polygon>
+<text fill="#252A35" font-family="JetBrains Mono, monospace" font-size="12" font-weight="600" text-anchor="middle" x="60" y="34">PRODUCER</text>
+<text fill="#6B7280" font-family="JetBrains Mono, monospace" font-size="11" text-anchor="middle" x="60" y="114">acks=all</text>
+</g>
+<!-- Healthy Producer -> Broker 1 & Broker 3 Connectors -->
+<path d="M 156 196 L 265 110" fill="none" marker-end="url(#arrowBlue)" stroke="#4269D8" stroke-width="1.75"></path>
+<path d="M 156 210 L 265 320" fill="none" marker-end="url(#arrowBlue)" stroke="#4269D8" stroke-width="1.75"></path>
+<!-- Broker 1 (Top Center - Healthy Leader) -->
+<g transform="translate(270, 48)">
+<polygon fill="#FFFFFF" points="90,0 180,45 90,90 0,45" stroke="#4269D8" stroke-width="1.5"></polygon>
+<polygon fill="#F4F6FC" points="0,45 90,90 90,130 0,85" stroke="#4269D8" stroke-width="1.5"></polygon>
+<polygon fill="#EAF0FF" points="180,45 90,90 90,130 180,85" stroke="#4269D8" stroke-width="1.5"></polygon>
+<circle cx="38" cy="45" fill="#2E7D32" r="4.5"></circle>
+<text fill="#252A35" font-family="JetBrains Mono, monospace" font-size="12" font-weight="600" text-anchor="middle" x="95" y="42">BROKER 1</text>
+<text fill="#2E7D32" font-family="JetBrains Mono, monospace" font-size="11" font-weight="500" text-anchor="middle" x="95" y="58">Leader: P0, P1</text>
+</g>
+<!-- Broker 2 (Middle Center - FAILED / OFFLINE) -->
+<g id="broker2-node" transform="translate(270, 175)">
+<polygon fill="#FDF2F2" id="b2-top" points="90,0 180,45 90,90 0,45" stroke="#C65353" stroke-width="1.5"></polygon>
+<polygon fill="#FAECEC" id="b2-left" points="0,45 90,90 90,130 0,85" stroke="#C65353" stroke-width="1.5"></polygon>
+<polygon fill="#F7E2E2" id="b2-right" points="180,45 90,90 90,130 180,85" stroke="#C65353" stroke-width="1.5"></polygon>
+<circle cx="38" cy="45" fill="#C65353" id="b2-dot" r="4.5"></circle>
+<text fill="#C65353" font-family="JetBrains Mono, monospace" font-size="12" font-weight="600" id="b2-title" text-anchor="middle" x="95" y="42">BROKER 2</text>
+<text fill="#C65353" font-family="JetBrains Mono, monospace" font-size="11" font-weight="500" id="b2-sub" text-anchor="middle" x="95" y="58">OFFLINE (Timeout)</text>
+</g>
+<!-- Dashed Offline Connectors to/from Broker 2 -->
+<path d="M 360 175 L 360 142" fill="none" id="b2-conn-in" marker-end="url(#arrowRed)" stroke="#C65353" stroke-dasharray="4,4" stroke-width="1.75"></path>
+<path d="M 450 220 L 560 220" fill="none" id="b2-conn-out" stroke="#C65353" stroke-dasharray="4,4" stroke-width="1.75"></path>
+<!-- Broker 3 (Bottom Center - Healthy Follower) -->
+<g transform="translate(270, 300)">
+<polygon fill="#FFFFFF" points="90,0 180,45 90,90 0,45" stroke="#4269D8" stroke-width="1.5"></polygon>
+<polygon fill="#F4F6FC" points="0,45 90,90 90,130 0,85" stroke="#4269D8" stroke-width="1.5"></polygon>
+<polygon fill="#EAF0FF" points="180,45 90,90 90,130 180,85" stroke="#4269D8" stroke-width="1.5"></polygon>
+<circle cx="38" cy="45" fill="#2E7D32" r="4.5"></circle>
+<text fill="#252A35" font-family="JetBrains Mono, monospace" font-size="12" font-weight="600" text-anchor="middle" x="95" y="42">BROKER 3</text>
+<text fill="#2E7D32" font-family="JetBrains Mono, monospace" font-size="11" font-weight="500" text-anchor="middle" x="95" y="58">ISR Follower</text>
+</g>
+<!-- Partition P1 Warning Badge -->
+<g id="p1-warning-badge" transform="translate(478, 128)">
+<rect fill="#FEF9EE" height="44" rx="4" stroke="#B98132" stroke-width="1.2" width="150" x="0" y="0"></rect>
+<text fill="#B98132" font-family="JetBrains Mono, monospace" font-size="11" font-weight="600" text-anchor="middle" x="75" y="18">PARTITION P1</text>
+<text fill="#B98132" font-family="JetBrains Mono, monospace" font-size="11" id="p1-warning-text" text-anchor="middle" x="75" y="34">Under-Replicated</text>
+</g>
+<!-- Healthy Broker 1 & Broker 3 -> Consumer Group Connectors -->
+<path d="M 450 93 L 575 190" fill="none" marker-end="url(#arrowGreen)" stroke="#2E7D32" stroke-width="1.75"></path>
+<path d="M 450 345 L 575 245" fill="none" marker-end="url(#arrowGreen)" stroke="#2E7D32" stroke-width="1.75"></path>
+<!-- Consumer Group Node (Right) -->
+<g transform="translate(575, 175)">
+<polygon fill="#FFFFFF" points="70,0 140,35 70,70 0,35" stroke="#4269D8" stroke-width="1.5"></polygon>
+<polygon fill="#F4F6FC" points="0,35 70,70 70,106 0,71" stroke="#4269D8" stroke-width="1.5"></polygon>
+<polygon fill="#EAF0FF" points="140,35 70,70 70,106 140,71" stroke="#4269D8" stroke-width="1.5"></polygon>
+<text fill="#2E7D32" font-family="JetBrains Mono, monospace" font-size="12" font-weight="600" text-anchor="middle" x="70" y="38">CONSUMERS</text>
+<text fill="#6B7280" font-family="JetBrains Mono, monospace" font-size="11" text-anchor="middle" x="70" y="122">Lag: 0 msg</text>
+</g>
+</svg>
+</div>
+</div>
+<!-- Right Column: Step 3 OBSERVE + Action + EXPLAIN (3 cols) -->
+<aside class="xl:col-span-3 flex flex-col gap-4">
+<!-- Step 3: OBSERVE Card -->
+<div class="bg-card p-4 rounded-lg border border-border-subtle flex flex-col gap-3.5">
+<div class="flex items-center justify-between">
+<span class="font-mono text-[11px] font-semibold uppercase tracking-wider text-tech-blue">Step 3 • Observe</span>
+<span class="px-2 py-0.5 rounded border border-border-subtle bg-paper font-mono text-[11px] text-ink-muted">Live Telemetry</span>
+</div>
+<!-- Live System Impact Items -->
+<div class="flex flex-col gap-2.5">
+<div class="p-3 rounded border border-warn-amber/30 bg-warn-amber-tint flex items-start gap-2.5">
+<span class="material-symbols-outlined text-warn-amber text-[18px] shrink-0 mt-0.5">sync_problem</span>
+<div class="min-w-0">
+<div class="font-mono text-[12px] font-medium text-ink" id="isr-status-text">ISR shrunk from [1,2,3] to [1,3]</div>
+<div class="text-[12px] text-ink-muted">Partition P1 replica on Broker 2 dropped</div>
+</div>
+</div>
+<div class="p-3 rounded border border-health-green/30 bg-health-green-tint flex items-start gap-2.5">
+<span class="material-symbols-outlined text-health-green text-[18px] shrink-0 mt-0.5">verified</span>
+<div class="min-w-0">
+<div class="font-mono text-[12px] font-medium text-health-green">acks=all still succeeding</div>
+<div class="text-[12px] text-ink-muted">min.insync.replicas=2 satisfied by [1,3]</div>
+</div>
+</div>
+</div>
+<!-- Key-Value Telemetry -->
+<div class="flex flex-col gap-1.5 bg-paper p-3 rounded border border-border-subtle">
+<div class="flex items-center justify-between">
+<span class="text-[12px] text-ink-muted font-medium">Replication Factor</span>
+<span class="font-mono text-[12px] text-ink font-semibold">3</span>
+</div>
+<div class="flex items-center justify-between">
+<span class="text-[12px] text-ink-muted font-medium">min.insync.replicas</span>
+<span class="font-mono text-[12px] text-ink font-semibold">2</span>
+</div>
+<div class="flex items-center justify-between">
+<span class="text-[12px] text-ink-muted font-medium">Under-Replicated</span>
+<span class="font-mono text-[12px] text-warn-amber font-semibold" id="urp-count">1 Partition (P1)</span>
+</div>
+</div>
+<!-- Action Button -->
+<button class="w-full py-2.5 px-4 rounded border border-tech-blue bg-tech-blue text-white font-medium text-[13px] hover:bg-tech-blue/90 transition-colors flex items-center justify-center gap-2 cursor-pointer shadow-none" id="recover-btn" type="button">
+<span class="material-symbols-outlined text-[18px]">restart_alt</span>
+<span id="recover-btn-label">Recover Broker 2</span>
+</button>
+</div>
+<!-- Step 4: EXPLAIN Section -->
+<div class="bg-card p-4 rounded-lg border border-border-subtle flex flex-col gap-2.5">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-tech-blue text-[18px]">psychology</span>
+<span class="font-mono text-[11px] font-semibold uppercase tracking-wider text-ink">Explain</span>
+</div>
+<p class="text-[13px] leading-relaxed text-ink-muted">
+          When Broker 2 goes offline, the KRaft controller removes it from the In-Sync Replicas (ISR) set. Because <span class="font-mono text-[11px] text-ink font-medium bg-paper px-1 py-0.5 rounded border border-border-subtle">min.insync.replicas=2</span> and Brokers 1 and 3 remain healthy, <span class="font-mono text-[11px] text-health-green font-medium">acks=all</span> writes continue without data loss or producer errors.
+        </p>
+</div>
+</aside>
+</section>
+</div>
+<script>
+  (function () {
+    const recoverBtn = document.getElementById('recover-btn');
+    const recoverLabel = document.getElementById('recover-btn-label');
+    const isrText = document.getElementById('isr-status-text');
+    const urpCount = document.getElementById('urp-count');
+    const canvasPill = document.getElementById('canvas-status-pill');
+
+    const b2Top = document.getElementById('b2-top');
+    const b2Left = document.getElementById('b2-left');
+    const b2Right = document.getElementById('b2-right');
+    const b2Dot = document.getElementById('b2-dot');
+    const b2Title = document.getElementById('b2-title');
+    const b2Sub = document.getElementById('b2-sub');
+    const b2ConnIn = document.getElementById('b2-conn-in');
+    const b2ConnOut = document.getElementById('b2-conn-out');
+    const p1Badge = document.getElementById('p1-warning-badge');
+    const p1Text = document.getElementById('p1-warning-text');
+
+    let isRecovered = false;
+
+    recoverBtn.addEventListener('click', function () {
+      isRecovered = !isRecovered;
+
+      if (isRecovered) {
+        recoverLabel.textContent = 'Simulate Broker 2 Failure';
+        isrText.textContent = 'ISR restored to [1,2,3]';
+        urpCount.textContent = '0 Partitions';
+        urpCount.classList.remove('text-warn-amber');
+        urpCount.classList.add('text-health-green');
+
+        canvasPill.textContent = 'Quorum Healthy';
+        canvasPill.className = 'px-2 py-0.5 rounded border border-health-green/30 bg-health-green-tint font-mono text-[11px] font-medium text-health-green';
+
+        b2Top.setAttribute('fill', '#FFFFFF');
+        b2Top.setAttribute('stroke', '#4269D8');
+        b2Left.setAttribute('fill', '#F4F6FC');
+        b2Left.setAttribute('stroke', '#4269D8');
+        b2Right.setAttribute('fill', '#EAF0FF');
+        b2Right.setAttribute('stroke', '#4269D8');
+        b2Dot.setAttribute('fill', '#2E7D32');
+        b2Title.setAttribute('fill', '#252A35');
+        b2Sub.textContent = 'ISR Follower (Synced)';
+        b2Sub.setAttribute('fill', '#2E7D32');
+
+        b2ConnIn.removeAttribute('stroke-dasharray');
+        b2ConnIn.setAttribute('stroke', '#2E7D32');
+        b2ConnIn.setAttribute('marker-end', 'url(#arrowGreen)');
+
+        b2ConnOut.removeAttribute('stroke-dasharray');
+        b2ConnOut.setAttribute('stroke', '#2E7D32');
+
+        p1Badge.querySelector('rect').setAttribute('fill', '#E8F5E9');
+        p1Badge.querySelector('rect').setAttribute('stroke', '#2E7D32');
+        p1Badge.querySelector('text').setAttribute('fill', '#2E7D32');
+        p1Text.setAttribute('fill', '#2E7D32');
+        p1Text.textContent = 'ISR Synced [1,2,3]';
+      } else {
+        recoverLabel.textContent = 'Recover Broker 2';
+        isrText.textContent = 'ISR shrunk from [1,2,3] to [1,3]';
+        urpCount.textContent = '1 Partition (P1)';
+        urpCount.classList.remove('text-health-green');
+        urpCount.classList.add('text-warn-amber');
+
+        canvasPill.textContent = 'Degraded Quorum';
+        canvasPill.className = 'px-2 py-0.5 rounded border border-warn-amber/30 bg-warn-amber-tint font-mono text-[11px] font-medium text-warn-amber';
+
+        b2Top.setAttribute('fill', '#FDF2F2');
+        b2Top.setAttribute('stroke', '#C65353');
+        b2Left.setAttribute('fill', '#FAECEC');
+        b2Left.setAttribute('stroke', '#C65353');
+        b2Right.setAttribute('fill', '#F7E2E2');
+        b2Right.setAttribute('stroke', '#C65353');
+        b2Dot.setAttribute('fill', '#C65353');
+        b2Title.setAttribute('fill', '#C65353');
+        b2Sub.textContent = 'OFFLINE (Timeout)';
+        b2Sub.setAttribute('fill', '#C65353');
+
+        b2ConnIn.setAttribute('stroke-dasharray', '4,4');
+        b2ConnIn.setAttribute('stroke', '#C65353');
+        b2ConnIn.setAttribute('marker-end', 'url(#arrowRed)');
+
+        b2ConnOut.setAttribute('stroke-dasharray', '4,4');
+        b2ConnOut.setAttribute('stroke', '#C65353');
+
+        p1Badge.querySelector('rect').setAttribute('fill', '#FEF9EE');
+        p1Badge.querySelector('rect').setAttribute('stroke', '#B98132');
+        p1Badge.querySelector('text').setAttribute('fill', '#B98132');
+        p1Text.setAttribute('fill', '#B98132');
+        p1Text.textContent = 'Under-Replicated';
+      }
+    });
+  })();
+</script></main><footer class="w-full bg-card border-t border-border-subtle py-3 px-6 flex items-center justify-between font-mono text-[11px] text-ink-muted"><span>KafkaLab Simulation Engine • KRaft Quorum Mode</span><span>Partition Telemetry Active</span></footer></body></html>
