@@ -105,7 +105,7 @@ function Toolbar({ lab, onCreated, open, setOpen }) {
         <button class=${"btn" + (open === "consumer" ? " on" : "")} onClick=${() => toggle("consumer")}>+ Consumer</button>
         <button class="btn danger" onClick=${clear}>Dọn sân chơi</button>
       </div>
-      ${open === "topic" && html`<${TopicForm} lab=${lab} done=${() => setOpen(null)} />`}
+      ${open === "topic" && html`<${TopicForm} lab=${lab} done=${() => setOpen((o) => (o === "topic" ? null : o))} />`}
       ${open === "producer" && html`<${ProducerForm} lab=${lab} onCreated=${onCreated} />`}
       ${open === "consumer" && html`<${ConsumerForm} lab=${lab} onCreated=${onCreated} />`}
       ${errs.length > 0 && html`<div class="banner" title=${errs.map(([k, v]) => `${k}: ${v}`).join("\n")}>

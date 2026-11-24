@@ -33,11 +33,36 @@
 .hop-body { font-family: var(--mono); overflow-wrap: anywhere; color: var(--muted); }
 .hop.ok .hop-body { color: var(--ink); }
 
+/* lessons */
+.lesson-top { display: grid; grid-template-columns: 280px minmax(0, 1fr); gap: 16px; align-items: start; }
+.curriculum { display: flex; flex-direction: column; gap: 10px; }
+.progress { height: 4px; background: var(--inset); }
+.progress div { height: 100%; background: var(--ok); }
+.lesson-list { display: flex; flex-direction: column; gap: 2px; }
+.lesson-item { display: flex; align-items: center; gap: 8px; width: 100%; padding: 7px 8px; background: none; border: 1px solid transparent; border-radius: var(--r); cursor: pointer; text-align: left; min-width: 0; }
+.lesson-item:hover { background: var(--inset); }
+.lesson-item.on { background: var(--wash); border-color: var(--blue-2); color: var(--blue); }
+.lesson-mark { flex: none; width: 20px; height: 20px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--rule); border-radius: 2px; background: var(--canvas); color: var(--muted); font: 500 11px/1 var(--mono); }
+.lesson-mark.done { color: var(--ok); border-color: var(--ok); }
+.lesson-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.steps { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; }
+.goal { padding: 10px 12px; border: 1px solid var(--rule); border-left: 3px solid var(--blue); border-radius: var(--r); background: var(--canvas); }
+.goal.done { border-left-color: var(--ok); background: var(--ok-wash); }
+.reveal-block { border-top: 1px solid var(--rule); padding-top: 12px; }
+.reveal { overflow-wrap: anywhere; }
+.reveal p { margin: 0 0 8px; }
+.reveal code { padding: 0 3px; background: var(--wash); color: var(--blue); border-radius: 2px; }
+.confirm { margin: 0; padding-left: 20px; }
+
 @media (max-width: 1279px) {
   .workspace { grid-template-columns: minmax(0, 1fr); }
   .inspector { position: static; max-height: none; }
 }
+@media (max-width: 1023px) {
+  .lesson-top { grid-template-columns: minmax(0, 1fr); }
+  .lesson-list { max-height: 190px; overflow-y: auto; }
+}
 @media (max-width: 767px) {
-  .work-foot { grid-template-columns: minmax(0, 1fr); }
+  .work-foot, .lesson-grid { grid-template-columns: minmax(0, 1fr); }
   .tool-select { max-width: none; width: 100%; }
 }

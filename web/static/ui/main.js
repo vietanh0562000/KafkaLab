@@ -3,8 +3,9 @@ import { useEffect, useState } from "preact/hooks";
 import { html, Header, Footer, Safe, TABS } from "./shell.js";
 import { useLab } from "./store.js";
 import { Playground } from "./screens/playground.js";
+import { Lessons } from "./screens/lessons.js";
 
-const SCREENS = { playground: Playground };
+const SCREENS = { playground: Playground, lessons: Lessons };
 const Pending = ({ route }) => html`<div class="panel">Đang xây dựng: ${route}</div>`;
 
 const routeOf = () => {
