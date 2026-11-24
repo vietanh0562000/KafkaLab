@@ -332,6 +332,7 @@ export function FlowMap({ lab, mode = "playground", selection, onSelect, empty }
           <div class="cluster" data-node="cluster">
             <div class="caps" style="margin-bottom:4px">Kafka cluster</div>
             <${BrokerRow} view=${view} selection=${selection} onSelect=${onSelect} />
+            ${topic.partitions.length === 0 && html`<div class="muted small">Chưa có partition nào của ${topic.name}.</div>`}
             ${topic.partitions.map((p) => html`<${Lane} key=${p.partition} p=${p} view=${view} health=${healths[p.partition]} selection=${selection} onSelect=${onSelect} />`)}
           </div>
         </div>

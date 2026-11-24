@@ -29,13 +29,28 @@ function Curriculum({ lessons, status, id, setId, done }) {
     </div>`;
 }
 
-function Lesson({ l, s }) {
+// The explanation sits under the map, so finishing a lesson never pushes the flow off the screen.
+function Reveal({ l, guess }) {
+  return html`<div class="panel stack">
+    <div class="caps">Giải thích</div>
+    ${guess && html`<div class="inset small">Dự đoán của bạn: “${guess}”. Đúng chỗ nào, sai chỗ nào?</div>`}
+    <div class="reveal" dangerouslySetInnerHTML=${{ __html: l.reveal }}></div>
+    <div class="caps">Lệnh tương đương</div>
+    ${l.cli.map((c, i) => html`<${Cli} key=${i} text=${c} />`)}
+    <div class="caps">Tự kiểm tra (không có đáp án)</div>
+    <ul class="confirm">${l.confirm.map((q, i) => html`<li key=${i}>${q}</li>`)}</ul>
+  </div>`;
+}
+
+function LessonPage({ l, s, lessons, status, setId, doneCount, lab }) {
   const key = `pg-predict-${l.id}`;
   const [guess, setGuess] = useState(safeStore.get(key, ""));
   const [shown, setShown] = useState(false);
   const done = s && s.done;
   return html`
-    <div class="panel stack lesson">
+    <div class="lesson-top">
+      <${Curriculum} lessons=${lessons} status=${status} id=${l.id} setId=${setId} done=${doneCount} />
+      <div class="panel stack lesson">
       <div class="row"><span class="tag blue">BÀI ${String(l.id).padStart(2, "0")}</span>
         <span class=${"tag " + (done ? "ok" : "")}>${done ? "Đã xong" : "Đang học"}</span></div>
       <h1 class="h1">${l.title}</h1>
@@ -58,18 +73,13 @@ function Lesson({ l, s }) {
         </div>
       </div>
       ${shown || done
-        ? html`<div class="stack reveal-block">
-            <div class="caps">Giải thích</div>
-            ${guess && html`<div class="inset small">Dự đoán của bạn: “${guess}”. Đúng chỗ nào, sai chỗ nào?</div>`}
-            <div class="reveal" dangerouslySetInnerHTML=${{ __html: l.reveal }}></div>
-            <div class="caps">Lệnh tương đương</div>
-            ${l.cli.map((c, i) => html`<${Cli} key=${i} text=${c} />`)}
-            <div class="caps">Tự kiểm tra (không có đáp án)</div>
-            <ul class="confirm">${l.confirm.map((q, i) => html`<li key=${i}>${q}</li>`)}</ul>
-          </div>`
+        ? html`<div class="muted small">Phần giải thích nằm dưới bản đồ flow.</div>`
         : html`<div class="row"><span class="muted small">Giải thích mở ra khi bạn đạt mục tiêu.</span>
             <button class="btn tiny" onClick=${() => setShown(true)}>xem luôn</button></div>`}
-    </div>`;
+      </div>
+    </div>
+    <${Safe} name="workspace"><${Workspace} lab=${lab} /><//>
+    ${(shown || done) && html`<${Reveal} l=${l} guess=${guess} />`}`;
 }
 
 export function Lessons({ lab }) {
@@ -89,10 +99,8 @@ export function Lessons({ lab }) {
   const l = lessons.find((x) => x.id === id) || lessons[0];
   return html`
     <div class="stack">
-      <div class="lesson-top">
-        <${Curriculum} lessons=${lessons} status=${status} id=${l && l.id} setId=${setId} done=${done} />
-        ${l ? html`<${Lesson} key=${l.id} l=${l} s=${status[l.id]} />` : html`<div class="panel muted">Đang tải bài học…</div>`}
-      </div>
-      <${Safe} name="workspace"><${Workspace} lab=${lab} /><//>
+      ${l
+        ? html`<${LessonPage} key=${l.id} l=${l} s=${status[l.id]} lessons=${lessons} status=${status} setId=${setId} doneCount=${done} lab=${lab} />`
+        : html`<div class="panel muted">Đang tải bài học…</div>`}
     </div>`;
 }

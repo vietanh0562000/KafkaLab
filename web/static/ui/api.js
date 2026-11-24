@@ -11,7 +11,8 @@ export async function api(method, path, body) {
     err.status = r.status;
     throw err;
   }
-  return text ? JSON.parse(text) : {};
+  // Some action endpoints answer with an empty or plain-text body.
+  try { return text ? JSON.parse(text) : {}; } catch { return {}; }
 }
 
 // Storage can be blocked (private window, cleared site data); the page must work without it.
