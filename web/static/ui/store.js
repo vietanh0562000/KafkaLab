@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import { api, safeStore } from "./api.js";
 import { mergeLastGood } from "./logic/merge.js";
+import { createHistory } from "./logic/history.js";
+import { createTracker, topicTotals } from "./logic/track.js";
 
 export const LESSON_TOPIC = "orders";
 export const SERVICE_TOPIC = "lab.short-term";
@@ -29,6 +31,12 @@ export function useLab() {
   const frozenRef = useRef(false);
   const latest = useRef({ st: null, snapshot: null });
   const pokeRef = useRef(() => {});
+  const tracker = useRef(null);
+  if (!tracker.current) tracker.current = createTracker();
+  const history = useRef(null);
+  if (!history.current) history.current = createHistory();
+  const [track, setTrack] = useState({ tokens: [], overflow: 0, changeAt: {}, lagSince: {}, staleBefore: {}, ignoredReads: {}, seq: 0 });
+  const latestTrack = useRef(track);
 
   const note = (text, err = false) => {
     setLog((l) => [{ t: new Date().toLocaleTimeString("vi-VN"), text, err }, ...l].slice(0, 80));
@@ -62,6 +70,8 @@ export function useLab() {
     if (!on) {
       setSt(latest.current.st);
       setSnapshot(latest.current.snapshot);
+      // Tokens from while the screen was frozen are old news; do not replay them.
+      setTrack({ ...latestTrack.current, tokens: [], overflow: 0 });
     }
   };
 
@@ -77,7 +87,14 @@ export function useLab() {
         if (asked === topicRef.current) {
           const s = mergeLastGood(raw, cache.current, asked);
           latest.current.st = s;
-          if (!frozenRef.current) setSt(s);
+          const at = Date.now();
+          const t = { ...tracker.current.update(s, at), seq: latestTrack.current.seq + 1 };
+          latestTrack.current = t;
+          if (s.topic) {
+            const { end, lag } = topicTotals(s.topic, s.groups);
+            history.current.sample(s.topic.name, at, { end, lag });
+          }
+          if (!frozenRef.current) { setSt(s); setTrack(t); }
         }
         setLive(true);
       } catch {
@@ -141,5 +158,5 @@ export function useLab() {
   };
 
   return { st, snapshot, live, frozen, setFrozen, topic, setTopic, act, note, log, cli, toast,
-    stepsByScenario, resultsByScenario, clearScenario };
+    stepsByScenario, resultsByScenario, clearScenario, track, history: history.current };
 }
