@@ -121,16 +121,19 @@ func ProduceSync(ctx context.Context, cl *kgo.Client, recs []Record) []Result {
 // ProduceTo sends recs to topic; an empty key is sent as no key, which leaves the choice to the partitioner.
 func ProduceTo(ctx context.Context, cl *kgo.Client, topic string, recs []Record) []Result {
 	krs := make([]*kgo.Record, len(recs))
+	index := make(map[*kgo.Record]int, len(recs))
 	for i, r := range recs {
 		krs[i] = &kgo.Record{Topic: topic, Value: r.Value}
 		if r.Key != "" {
 			krs[i].Key = []byte(r.Key) // a nil key, not an empty one, is what tells the partitioner "no key"
 		}
+		index[krs[i]] = i
 	}
+	// Results arrive in completion order, which differs from input order once records span partitions.
 	res := cl.ProduceSync(ctx, krs...)
-	out := make([]Result, len(res))
-	for i, r := range res {
-		out[i] = Result{Partition: r.Record.Partition, Offset: r.Record.Offset, Err: r.Err}
+	out := make([]Result, len(recs))
+	for _, r := range res {
+		out[index[r.Record]] = Result{Partition: r.Record.Partition, Offset: r.Record.Offset, Err: r.Err}
 	}
 	return out
 }

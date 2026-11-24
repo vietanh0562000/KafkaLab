@@ -195,3 +195,36 @@ func TestListTopicsSkipsTopicsThatDoNotExist(t *testing.T) {
 		}
 	}
 }
+
+// franz-go finishes records partition by partition, so its results do not come back in the order they were sent.
+func TestProduceToResultsFollowInputOrder(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+	a := mustAdmin(t)
+	const name = "itest-order"
+	_ = a.DeleteTopic(ctx, name)
+	if err := a.CreateTopic(ctx, TopicSpec{Name: name, Partitions: 3, RF: 3}); err != nil {
+		t.Fatal(err)
+	}
+	defer a.DeleteTopic(context.Background(), name)
+	cl, err := NewProducer(DefaultProfile())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cl.Close()
+	recs := make([]Record, 30)
+	for i := range recs {
+		recs[i] = Record{Key: fmt.Sprintf("k%d", i), Value: []byte("v")}
+	}
+	batch := ProduceTo(ctx, cl, name, recs)
+	for i, r := range recs {
+		// A key always hashes to one partition, so a lone send shows where the batched record must have gone.
+		one := ProduceTo(ctx, cl, name, []Record{r})
+		if batch[i].Err != nil || one[0].Err != nil {
+			t.Fatal(batch[i].Err, one[0].Err)
+		}
+		if batch[i].Partition != one[0].Partition {
+			t.Fatalf("%s: batch result says P%d, key lives on P%d", r.Key, batch[i].Partition, one[0].Partition)
+		}
+	}
+}
