@@ -2,6 +2,10 @@ import { render } from "preact";
 import { useEffect, useState } from "preact/hooks";
 import { html, Header, Footer, Safe, TABS } from "./shell.js";
 import { useLab } from "./store.js";
+import { Playground } from "./screens/playground.js";
+
+const SCREENS = { playground: Playground };
+const Pending = ({ route }) => html`<div class="panel">Đang xây dựng: ${route}</div>`;
 
 const routeOf = () => {
   const h = location.hash.slice(1).split("/")[0];
@@ -20,7 +24,7 @@ function App() {
     <div class="app">
       <${Header} route=${route} lab=${lab} />
       <main class="page"><${Safe} name=${route} key=${route}>
-        <div class="panel">Đang xây dựng: ${route}</div>
+        ${SCREENS[route] ? html`<${SCREENS[route]} lab=${lab} />` : html`<${Pending} route=${route} />`}
       <//></main>
       <${Footer} lab=${lab} />
       ${lab.toast && html`<div class=${"toast" + (lab.toast.err ? " err" : "")}>${lab.toast.text}</div>`}

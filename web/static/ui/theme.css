@@ -1,4 +1,6 @@
 @import "../vendor/fonts/fonts.css";
+@import "./flow.css";
+@import "./workspace.css";
 
 /* Tokens from design/notebook_telemetry/DESIGN.md. Hex values live only in this file. */
 :root {
