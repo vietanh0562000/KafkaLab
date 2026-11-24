@@ -4,9 +4,10 @@ import { html, Header, Footer, Safe, TABS } from "./shell.js";
 import { useLab } from "./store.js";
 import { Playground } from "./screens/playground.js";
 import { Lessons } from "./screens/lessons.js";
+import { Scenarios } from "./screens/scenarios.js";
+import { Dashboard } from "./screens/dashboard.js";
 
-const SCREENS = { playground: Playground, lessons: Lessons };
-const Pending = ({ route }) => html`<div class="panel">Đang xây dựng: ${route}</div>`;
+const SCREENS = { playground: Playground, lessons: Lessons, scenarios: Scenarios, dashboard: Dashboard };
 
 const routeOf = () => {
   const h = location.hash.slice(1).split("/")[0];
@@ -25,7 +26,7 @@ function App() {
     <div class="app">
       <${Header} route=${route} lab=${lab} />
       <main class="page"><${Safe} name=${route} key=${route}>
-        ${SCREENS[route] ? html`<${SCREENS[route]} lab=${lab} />` : html`<${Pending} route=${route} />`}
+        <${SCREENS[route]} lab=${lab} />
       <//></main>
       <${Footer} lab=${lab} />
       ${lab.toast && html`<div class=${"toast" + (lab.toast.err ? " err" : "")}>${lab.toast.text}</div>`}

@@ -48,21 +48,60 @@
 .steps { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; }
 .goal { padding: 10px 12px; border: 1px solid var(--rule); border-left: 3px solid var(--blue); border-radius: var(--r); background: var(--canvas); }
 .goal.done { border-left-color: var(--ok); background: var(--ok-wash); }
-.reveal-block { border-top: 1px solid var(--rule); padding-top: 12px; }
 .reveal { overflow-wrap: anywhere; }
 .reveal p { margin: 0 0 8px; }
 .reveal code { padding: 0 3px; background: var(--wash); color: var(--blue); border-radius: 2px; }
 .confirm { margin: 0; padding-left: 20px; }
 
+/* scenarios */
+.scenario-page { display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: 16px; align-items: start; }
+.scenario-list { display: flex; flex-direction: column; gap: 8px; }
+.module { display: flex; flex-direction: column; gap: 2px; }
+.module-name { font: 500 11px/16px var(--mono); color: var(--muted); padding-top: 4px; }
+.soon { padding: 2px 8px; }
+.scenario-head { flex-wrap: wrap; align-items: flex-start; }
+.stepper { list-style: none; display: flex; flex-wrap: wrap; gap: 4px; margin: 0; padding: 4px; background: var(--inset); border: 1px solid var(--rule); border-radius: var(--r); }
+.stepper li { padding: 4px 9px; font: 500 11px/16px var(--mono); color: var(--muted); border: 1px solid transparent; border-radius: 2px; }
+.stepper li.done { color: var(--ok); background: var(--canvas); border-color: var(--rule); }
+.stepper li.on { color: var(--blue); background: var(--wash); border-color: var(--blue); }
+.scenario-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; align-items: start; }
+.hop.run-step { grid-template-columns: 20px minmax(0, 1fr); }
+details summary { cursor: pointer; }
+details[open] summary { margin-bottom: 10px; }
+
+/* dashboard */
+.metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
+.metric-value { font: 500 22px/28px var(--mono); letter-spacing: -.02em; margin-top: 6px; overflow-wrap: anywhere; }
+.dash-charts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.dash-tables { display: grid; grid-template-columns: 1.1fr 1fr 1.1fr; gap: 16px; align-items: start; }
+.chart-box { position: relative; min-width: 0; height: 190px; overflow: hidden; }
+.chart-box svg { display: block; }
+.grid-line { stroke: var(--grid); stroke-width: 1; }
+.axis { fill: var(--muted); font: 400 11px var(--mono); }
+.series { fill: none; stroke: var(--blue); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.cross { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 2 2; }
+.hover-dot { fill: var(--blue); stroke: var(--canvas); stroke-width: 2; }
+.chart-tip { position: absolute; top: 6px; padding: 4px 8px; background: var(--canvas); border: 1px solid var(--ink); border-radius: var(--r); box-shadow: 2px 2px 0 var(--offset); font: 400 11px/16px var(--mono); pointer-events: none; white-space: nowrap; }
+.chart-empty { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none; }
+.break { overflow-wrap: anywhere; }
+tr.row-on td { background: var(--wash); }
+
 @media (max-width: 1279px) {
   .workspace { grid-template-columns: minmax(0, 1fr); }
   .inspector { position: static; max-height: none; }
+  .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .dash-tables { grid-template-columns: minmax(0, 1fr); }
 }
 @media (max-width: 1023px) {
-  .lesson-top { grid-template-columns: minmax(0, 1fr); }
+  .lesson-top, .scenario-page { grid-template-columns: minmax(0, 1fr); }
   .lesson-list { max-height: 190px; overflow-y: auto; }
+  .scenario-list { max-height: 260px; overflow-y: auto; }
+  .dash-charts { grid-template-columns: minmax(0, 1fr); }
 }
 @media (max-width: 767px) {
-  .work-foot, .lesson-grid { grid-template-columns: minmax(0, 1fr); }
+  .work-foot, .lesson-grid, .scenario-grid { grid-template-columns: minmax(0, 1fr); }
   .tool-select { max-width: none; width: 100%; }
+}
+@media (max-width: 480px) {
+  .metrics { grid-template-columns: minmax(0, 1fr); }
 }
