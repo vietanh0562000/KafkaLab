@@ -1,0 +1,40 @@
+{
+  "version": 2,
+  "skills": {
+    "content-editing": {
+      "source": "scibly-dev/skills",
+      "commit": "bbed194ef880cbf308f6b6c8b025d2f3a928d9d3",
+      "sourceType": "github",
+      "skillPath": "skills/content-editing/SKILL.md",
+      "computedHash": "408c1751c36a2330087640dd62dcd84f66c094ce5d84ec13d83b99cc2ac33d0c"
+    },
+    "didactic-reduction": {
+      "source": "scibly-dev/skills",
+      "commit": "bbed194ef880cbf308f6b6c8b025d2f3a928d9d3",
+      "sourceType": "github",
+      "skillPath": "skills/didactic-reduction/SKILL.md",
+      "computedHash": "66ab004363216fa88b7001c1e774629a6804568d695eb6d414732bdcefd8a226"
+    },
+    "learning-objectives": {
+      "source": "scibly-dev/skills",
+      "commit": "bbed194ef880cbf308f6b6c8b025d2f3a928d9d3",
+      "sourceType": "github",
+      "skillPath": "skills/learning-objectives/SKILL.md",
+      "computedHash": "678269c469435b51f5c5f28930c371aeaf4470a63d8d3416bf7d48a9532a376f"
+    },
+    "microlearning-design": {
+      "source": "scibly-dev/skills",
+      "commit": "bbed194ef880cbf308f6b6c8b025d2f3a928d9d3",
+      "sourceType": "github",
+      "skillPath": "skills/microlearning-design/SKILL.md",
+      "computedHash": "35f26b4af9c616c58fcc59f3b2b6f0059dc068f70cc949ab637ac5020d63a4d3"
+    },
+    "scenario-generation": {
+      "source": "scibly-dev/skills",
+      "commit": "bbed194ef880cbf308f6b6c8b025d2f3a928d9d3",
+      "sourceType": "github",
+      "skillPath": "skills/scenario-generation/SKILL.md",
+      "computedHash": "7367eb461d379bba005329c061e310a4f3070401806b0eb63d685bae5e470452"
+    }
+  }
+}
