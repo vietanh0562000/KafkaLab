@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<meta content="web_standard" name="shell-type"/>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<style>
+    @layer base {
+      html, body {
+        margin: 0;
+        padding: 0;
+        background-color: #FAFAF7;
+        color: #252A35;
+      }
+      body {
+        overscroll-behavior: none;
+      }
+      main > :first-child {
+        margin-top: 0 !important;
+      }
+      main > :last-child {
+        margin-bottom: 0 !important;
+      }
+    }
+    ::-webkit-scrollbar {
+      display: none;
+    }
+  </style>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          colors: {
+            "paper-bg": "#FAFAF7",
+            "paper-surface": "#FFFFFF",
+            "paper-panel": "#F8F8F5",
+            "paper-border": "#E2E2DC",
+            "paper-muted": "#F3F3EF",
+            "ink": "#252A35",
+            "ink-muted": "#646974",
+            "tech-blue": "#4269D8",
+            "tech-blue-light": "#EAF0FF",
+            "tech-blue-border": "#7893D9",
+            "tech-green": "#39845D",
+            "tech-green-light": "#EBF5EE",
+            "tech-amber": "#B98132",
+            "tech-red": "#C65353"
+          },
+          fontFamily: {
+            sans: ["Inter", "sans-serif"],
+            mono: ["JetBrains Mono", "monospace"]
+          }
+        }
+      }
+    };
+  </script>
+</head>
+<body class="bg-paper-bg font-sans text-ink antialiased">
+<!-- HEADER -->
+<header class="fixed top-0 w-full z-50 bg-[#FAFAF7] border-b border-paper-border">
+<div class="h-14 w-full px-5 flex items-center justify-between gap-4">
+<div class="flex items-center gap-2.5 shrink-0">
+<svg class="w-6 h-6 text-tech-blue" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" viewbox="0 0 24 24">
+<polygon points="12 2 21 7 21 17 12 22 3 17 3 7 12 2"></polygon>
+<polyline points="3 7 12 12 21 7"></polyline>
+<line x1="12" x2="12" y1="22" y2="12"></line>
+</svg>
+<span class="font-semibold text-[17px] text-ink tracking-tight">KafkaLab</span>
+<span class="px-2 py-0.5 rounded bg-paper-muted border border-paper-border font-mono text-[11px] font-medium text-ink-muted">v2.4 KRaft</span>
+</div>
+<nav class="hidden lg:flex items-center gap-1">
+<a aria-current="page" class="px-3 py-1.5 rounded bg-tech-blue-light text-tech-blue font-semibold text-[13px] border border-tech-blue/20" data-path="playground" href="#">Playground</a>
+<a class="px-3 py-1.5 rounded text-[13px] font-medium text-ink-muted hover:text-ink hover:bg-paper-muted transition-colors" data-path="lessons" href="#">Lessons</a>
+<a class="px-3 py-1.5 rounded text-[13px] font-medium text-ink-muted hover:text-ink hover:bg-paper-muted transition-colors" data-path="failure-scenarios" href="#">Failure Scenarios</a>
+<a class="px-3 py-1.5 rounded text-[13px] font-medium text-ink-muted hover:text-ink hover:bg-paper-muted transition-colors" data-path="live-dashboard" href="#">Live Dashboard</a>
+<a class="px-3 py-1.5 rounded text-[13px] font-medium text-ink-muted hover:text-ink hover:bg-paper-muted transition-colors" data-path="cli-console" href="#">CLI Console</a>
+</nav>
+<div class="flex items-center gap-3 shrink-0">
+<div class="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded bg-tech-green-light border border-tech-green/30 text-tech-green">
+<span class="w-2 h-2 rounded-full bg-tech-green"></span>
+<span class="font-mono text-[11px] font-medium">3/3 Brokers Online</span>
+</div>
+<div class="hidden md:flex items-center rounded bg-paper-surface border border-paper-border p-0.5">
+<button class="px-2.5 py-1 rounded text-[11px] font-medium bg-tech-blue text-white shadow-xs" type="button">Network</button>
+<button class="px-2.5 py-1 rounded text-[11px] font-medium text-ink-muted hover:text-ink transition-colors" type="button">Sequence</button>
+</div>
+<button class="flex items-center gap-1 px-3 py-1.5 rounded border border-paper-border bg-paper-surface hover:bg-paper-muted text-ink font-medium text-[12px] transition-colors shadow-xs" type="button">
+<span class="material-symbols-outlined text-[16px]">pause</span>
+<span>Pause</span>
+</button>
+<div class="w-8 h-8 rounded border border-paper-border bg-paper-surface text-ink flex items-center justify-center shadow-xs">
+<span class="material-symbols-outlined text-ink text-[18px]">person</span>
+</div>
+</div>
+</div>
+</header>
+<!-- MAIN VIEWPORT -->
+<main class="w-full pt-14 bg-paper-bg min-h-screen">
+<div class="flex flex-col w-full">
+<div class="flex flex-col lg:flex-row w-full gap-4 p-4 lg:p-6">
+<!-- WHITEBOARD CANVAS CONTAINER -->
+<section class="relative flex-1 min-w-0 bg-paper-surface border border-paper-border rounded-lg overflow-hidden flex flex-col justify-between min-h-[640px] shadow-xs">
+<!-- SUBTLE WHITEBOARD TECHNICAL GRID PATTERN -->
+<svg class="absolute inset-0 w-full h-full pointer-events-none opacity-45" xmlns="http://www.w3.org/2000/svg">
+<defs>
+<pattern height="28" id="isoGridLight" patternunits="userSpaceOnUse" width="48">
+<path d="M 24 0 L 48 14 L 24 28 L 0 14 Z" fill="none" stroke="#DCDCD4" stroke-width="0.75"></path>
+</pattern>
+</defs>
+<rect fill="url(#isoGridLight)" height="100%" width="100%"></rect>
+</svg>
+<!-- TOP BAR INSIDE CANVAS -->
+<div class="relative z-10 flex items-center justify-between px-5 pt-4">
+<div class="flex items-center gap-2.5">
+<span class="px-2.5 py-0.5 rounded bg-tech-blue-light text-tech-blue font-mono text-[11px] font-semibold border border-tech-blue/20">TOPOLOGY // KRAFT-QUORUM</span>
+<span class="font-mono text-[11px] text-ink-muted font-medium">orders.events • 3 Partitions • RF=3</span>
+</div>
+<div class="flex items-center gap-1.5">
+<button class="px-2 py-0.5 rounded bg-paper-muted border border-paper-border text-ink-muted hover:text-ink font-mono text-[11px] transition-colors" id="zoomResetBtn" type="button">100%</button>
+</div>
+</div>
+<!-- ISOMETRIC 2.5D DRAFTING SCHEMATIC -->
+<div class="relative z-10 flex-1 flex items-center justify-center p-4">
+<svg class="w-full h-auto max-h-[540px]" id="infraCanvas" viewbox="0 0 1080 540" xmlns="http://www.w3.org/2000/svg">
+<defs>
+<marker id="arrowDraftBlue" markerheight="6" markerwidth="6" orient="auto-start-reverse" refx="8" refy="5" viewbox="0 0 10 10">
+<path d="M 0 1 L 10 5 L 0 9 z" fill="#4269D8"></path>
+</marker>
+<marker id="arrowDraftGreen" markerheight="6" markerwidth="6" orient="auto-start-reverse" refx="8" refy="5" viewbox="0 0 10 10">
+<path d="M 0 1 L 10 5 L 0 9 z" fill="#39845D"></path>
+</marker>
+</defs>
+<!-- KAFKA CLUSTER BOUNDARY -->
+<rect fill="#F8FAFD" fill-opacity="0.9" height="456" rx="8" stroke="#4269D8" stroke-dasharray="6 4" stroke-opacity="0.45" stroke-width="1.5" width="465" x="255" y="42"></rect>
+<text fill="#252A35" font-family="JetBrains Mono, monospace" font-size="11" font-weight="600" letter-spacing="0.06em" x="275" y="68">KAFKA CLUSTER</text>
+<!-- KRaft Controller Badge -->
+<rect fill="#EBF5EE" height="24" rx="4" stroke="#39845D" stroke-width="1" width="215" x="485" y="52"></rect>
+<circle cx="499" cy="64" fill="#39845D" r="3.5"></circle>
+<text fill="#39845D" font-family="JetBrains Mono, monospace" font-size="10.5" font-weight="500" x="510" y="68">KRaft Controller (Active: B1)</text>
+<!-- PRODUCER WORKSTATION (LEFT) -->
+<g class="cursor-pointer group" data-node="producer">
+<!-- Isometric base -->
+<polygon fill="#FFFFFF" points="95,215 155,180 215,215 155,250" stroke="#4269D8" stroke-width="1.5"></polygon>
+<polygon fill="#F4F6FC" points="95,215 155,250 155,270 95,235" stroke="#4269D8" stroke-width="1.5"></polygon>
+<polygon fill="#E8EDF9" points="215,215 155,250 155,270 215,235" stroke="#4269D8" stroke-width="1.5"></polygon>
+<!-- Monitor screen -->
+<polygon fill="#FFFFFF" points="122,190 155,171 188,190 155,209" stroke="#4269D8" stroke-width="1.5"></polygon>
+<polygon fill="#EAF0FF" points="130,190 155,176 180,190 155,204"></polygon>
+<text fill="#252A35" font-family="JetBrains Mono, monospace" font-size="11" font-weight="600" text-anchor="middle" x="155" y="294">PRODUCER</text>
+<text fill="#646974" font-family="JetBrains Mono, monospace" font-size="10" text-anchor="middle" x="155" y="310">order-api-v2</text>
+</g>
+<!-- BROKER 1 - LEADER -->
+<g class="cursor-pointer" data-node="broker-1">
+<polygon fill="#FFFFFF" points="335,130 390,98 445,130 390,162" stroke="#4269D8" stroke-width="1.5"></polygon>
+<polygon fill="#F4F6FC" points="335,130 390,162 390,214 335,182" stroke="#4269D8" stroke-width="1.5"></polygon>
+<polygon fill="#E8EDF9" points="445,130 390,162 390,214 445,182" stroke="#4269D8" stroke-width="1.5"></polygon>
+<line stroke="#39845D" stroke-width="1.75" x1="348" x2="376" y1="152" y2="168"></line>
+<line stroke="#4269D8" stroke-width="1.5" x1="348" x2="376" y1="164" y2="180"></line>
+<circle cx="432" cy="148" fill="#39845D" r="3.5"></circle>
+<text fill="#252A35" font-family="JetBrains Mono, monospace" font-size="11" font-weight="600" text-anchor="middle" x="390" y="234">Broker 1 - Leader</text>
+</g>
+<!-- BROKER 2 -->
+<g class="cursor-pointer" data-node="broker-2">
+<polygon fill="#FFFFFF" points="335,280 390,248 445,280 390,312" stroke="#7893D9" stroke-width="1.5"></polygon>
+<polygon fill="#F4F6FC" points="335,280 390,312 390,364 335,332" stroke="#7893D9" stroke-width="1.5"></polygon>
+<polygon fill="#E8EDF9" points="445,280 390,312 390,364 445,332" stroke="#7893D9" stroke-width="1.5"></polygon>
+<line stroke="#7893D9" stroke-width="1.5" x1="348" x2="376" y1="302" y2="318"></line>
+<line stroke="#7893D9" stroke-width="1.5" x1="348" x2="376" y1="314" y2="330"></line>
+<circle cx="432" cy="298" fill="#39845D" r="3.5"></circle>
+<text fill="#252A35" font-family="JetBrains Mono, monospace" font-size="11" font-weight="500" text-anchor="middle" x="390" y="384">Broker 2</text>
+</g>
+<!-- BROKER 3 -->
+<g class="cursor-pointer" data-node="broker-3">
+<polygon fill="#FFFFFF" points="335,410 390,378 445,410 390,442" stroke="#7893D9" stroke-width="1.5"></polygon>
+<polygon fill="#F4F6FC" points="335,410 390,442 390,476 335,444" stroke="#7893D9" stroke-width="1.5"></polygon>
+<polygon fill="#E8EDF9" points="445,410 390,442 390,476 445,444" stroke="#7893D9" stroke-width="1.5"></polygon>
+<line stroke="#7893D9" stroke-width="1.5" x1="348" x2="376" y1="430" y2="446"></line>
+<circle cx="432" cy="426" fill="#39845D" r="3.5"></circle>
+<text fill="#252A35" font-family="JetBrains Mono, monospace" font-size="11" font-weight="500" text-anchor="middle" x="390" y="492">Broker 3</text>
+</g>
+<!-- TOPIC: orders.events & PARTITIONS -->
+<rect fill="#FFFFFF" height="336" rx="6" stroke="#4269D8" stroke-width="1.5" width="180" x="520" y="112"></rect>
+<text fill="#4269D8" font-family="JetBrains Mono, monospace" font-size="11" font-weight="600" text-anchor="middle" x="610" y="136">Topic: orders.events</text>
+<!-- Partition P0 (Active) -->
+<g class="cursor-pointer partition-node" data-partition="P0">
+<rect fill="#F4F7FF" height="72" rx="4" stroke="#4269D8" stroke-width="1.5" width="148" x="536" y="154"></rect>
+<text fill="#252A35" font-family="JetBrains Mono, monospace" font-size="11" font-weight="600" x="548" y="176">Partition P0</text>
+<rect fill="#EBF5EE" height="18" rx="3" stroke="#39845D" stroke-width="1" width="40" x="634" y="162"></rect>
+<text fill="#39845D" font-family="JetBrains Mono, monospace" font-size="9.5" font-weight="600" text-anchor="middle" x="654" y="175">ISR 3/3</text>
+<text fill="#646974" font-family="JetBrains Mono, monospace" font-size="10" x="548" y="198">Leader: B1</text>
+<text fill="#4269D8" font-family="JetBrains Mono, monospace" font-size="10" font-weight="600" x="548" y="214">HW: 14,208</text>
+</g>
+<!-- Partition P1 -->
+<g class="cursor-pointer partition-node" data-partition="P1">
+<rect fill="#FFFFFF" height="72" rx="4" stroke="#E2E2DC" stroke-width="1.25" width="148" x="536" y="246"></rect>
+<text fill="#252A35" font-family="JetBrains Mono, monospace" font-size="11" font-weight="600" x="548" y="268">Partition P1</text>
+<rect fill="#EBF5EE" height="18" rx="3" stroke="#39845D" stroke-width="1" width="40" x="634" y="254"></rect>
+<text fill="#39845D" font-family="JetBrains Mono, monospace" font-size="9.5" font-weight="600" text-anchor="middle" x="654" y="267">ISR 3/3</text>
+<text fill="#646974" font-family="JetBrains Mono, monospace" font-size="10" x="548" y="290">Leader: B2</text>
+<text fill="#646974" font-family="JetBrains Mono, monospace" font-size="10" x="548" y="306">HW: 14,195</text>
+</g>
+<!-- Partition P2 -->
+<g class="cursor-pointer partition-node" data-partition="P2">
+<rect fill="#FFFFFF" height="72" rx="4" stroke="#E2E2DC" stroke-width="1.25" width="148" x="536" y="338"></rect>
+<text fill="#252A35" font-family="JetBrains Mono, monospace" font-size="11" font-weight="600" x="548" y="360">Partition P2</text>
+<rect fill="#EBF5EE" height="18" rx="3" stroke="#39845D" stroke-width="1" width="40" x="634" y="346"></rect>
+<text fill="#39845D" font-family="JetBrains Mono, monospace" font-size="9.5" font-weight="600" text-anchor="middle" x="654" y="359">ISR 3/3</text>
+<text fill="#646974" font-family="JetBrains Mono, monospace" font-size="10" x="548" y="382">Leader: B3</text>
+<text fill="#646974" font-family="JetBrains Mono, monospace" font-size="10" x="548" y="398">HW: 14,201</text>
+</g>
+<!-- REPLICATION ARROWS -->
+<path d="M 445 162 L 536 190" fill="none" marker-end="url(#arrowDraftBlue)" stroke="#4269D8" stroke-width="1.5"></path>
+<path d="M 445 312 L 536 282" fill="none" marker-end="url(#arrowDraftBlue)" stroke="#7893D9" stroke-dasharray="4 3" stroke-width="1.5"></path>
+<path d="M 445 430 L 536 374" fill="none" marker-end="url(#arrowDraftBlue)" stroke="#7893D9" stroke-dasharray="4 3" stroke-width="1.5"></path>
+<!-- CONSUMER GROUP (RIGHT TOP) -->
+<g class="cursor-pointer">
+<rect fill="#FFFFFF" height="78" rx="6" stroke="#4269D8" stroke-width="1.5" width="240" x="780" y="135"></rect>
+<text fill="#252A35" font-family="JetBrains Mono, monospace" font-size="11" font-weight="600" text-anchor="middle" x="900" y="160">CONSUMER GROUP</text>
+<text fill="#4269D8" font-family="JetBrains Mono, monospace" font-size="10.5" text-anchor="middle" x="900" y="178">(cg-order-processors)</text>
+<text fill="#39845D" font-family="JetBrains Mono, monospace" font-size="10" font-weight="500" text-anchor="middle" x="900" y="198">Lag: 0 msgs • 3/3 Active</text>
+</g>
+<!-- SPRING BOOT SERVICE (RIGHT MIDDLE) -->
+<g class="cursor-pointer">
+<rect fill="#FFFFFF" height="64" rx="6" stroke="#4269D8" stroke-width="1.5" width="200" x="800" y="256"></rect>
+<text fill="#252A35" font-family="JetBrains Mono, monospace" font-size="11" font-weight="600" text-anchor="middle" x="900" y="284">SPRING BOOT SERVICE</text>
+<text fill="#646974" font-family="JetBrains Mono, monospace" font-size="10" text-anchor="middle" x="900" y="302">order-processor-svc</text>
+</g>
+<!-- TIMESCALEDB CYLINDER (RIGHT BOTTOM) -->
+<g class="cursor-pointer">
+<path d="M 840 385 L 840 448 A 60 18 0 0 0 960 448 L 960 385" fill="#F8FAFD" stroke="#4269D8" stroke-width="1.5"></path>
+<ellipse cx="900" cy="385" fill="#FFFFFF" rx="60" ry="18" stroke="#4269D8" stroke-width="1.5"></ellipse>
+<path d="M 840 416 A 60 18 0 0 0 960 416" fill="none" stroke="#7893D9" stroke-dasharray="3 3" stroke-width="1.25"></path>
+<text fill="#252A35" font-family="JetBrains Mono, monospace" font-size="11" font-weight="600" text-anchor="middle" x="900" y="438">TIMESCALEDB</text>
+<text fill="#646974" font-family="JetBrains Mono, monospace" font-size="10" text-anchor="middle" x="900" y="484">hypertable: orders_ts</text>
+</g>
+<!-- DIRECTIONAL CONNECTION PATHS -->
+<path d="M 215 225 C 275 225, 275 162, 335 162" fill="none" id="pathProducerToCluster" marker-end="url(#arrowDraftBlue)" stroke="#4269D8" stroke-width="1.5"></path>
+<path d="M 684 190 C 732 190, 732 174, 780 174" fill="none" id="pathTopicToConsumer" marker-end="url(#arrowDraftBlue)" stroke="#4269D8" stroke-width="1.5"></path>
+<path d="M 900 213 L 900 256" fill="none" id="pathConsumerToSpring" marker-end="url(#arrowDraftBlue)" stroke="#4269D8" stroke-width="1.5"></path>
+<path d="M 900 320 L 900 367" fill="none" id="pathSpringToDb" marker-end="url(#arrowDraftBlue)" stroke="#4269D8" stroke-width="1.5"></path>
+<!-- ANIMATED PACKETS (CLEAN TECHNICAL INK DOTS) -->
+<circle fill="#4269D8" r="4.5">
+<animatemotion dur="2.1s" repeatcount="indefinite">
+<mpath href="#pathProducerToCluster"></mpath>
+</animatemotion>
+</circle>
+<circle fill="#7893D9" r="4">
+<animatemotion begin="1.05s" dur="2.1s" repeatcount="indefinite">
+<mpath href="#pathProducerToCluster"></mpath>
+</animatemotion>
+</circle>
+<circle fill="#4269D8" r="4.5">
+<animatemotion dur="1.8s" repeatcount="indefinite">
+<mpath href="#pathTopicToConsumer"></mpath>
+</animatemotion>
+</circle>
+<circle fill="#4269D8" r="4">
+<animatemotion dur="1.4s" repeatcount="indefinite">
+<mpath href="#pathConsumerToSpring"></mpath>
+</animatemotion>
+</circle>
+<circle fill="#39845D" r="4">
+<animatemotion begin="0.5s" dur="1.4s" repeatcount="indefinite">
+<mpath href="#pathSpringToDb"></mpath>
+</animatemotion>
+</circle>
+</svg>
+</div>
+<!-- FLOATING ACTION CONTROLS (BOTTOM-LEFT) -->
+<div class="relative z-10 flex flex-wrap items-center gap-2.5 px-5 pb-4">
+<div class="flex flex-wrap items-center gap-2 bg-[#FAFAF7]/95 border border-paper-border p-1.5 rounded-lg shadow-xs">
+<button class="flex items-center gap-1.5 px-3 py-1.5 rounded bg-paper-surface border border-paper-border text-ink hover:bg-paper-muted text-[12px] font-medium transition-colors shadow-xs" id="createTopicBtn" type="button">
+<span class="material-symbols-outlined text-[16px]">add</span>
+<span>Create Topic</span>
+</button>
+<button class="flex items-center gap-1.5 px-3 py-1.5 rounded bg-tech-blue text-white hover:bg-tech-blue/90 text-[12px] font-medium transition-colors shadow-xs" id="sendMsgBtn" type="button">
+<span class="material-symbols-outlined text-[16px]">send</span>
+<span>Send Test Message</span>
+</button>
+<div class="flex items-center gap-2 px-3 py-1.5 rounded bg-paper-surface border border-paper-border text-tech-green font-mono text-[11px] font-medium shadow-xs">
+<span class="w-2 h-2 rounded-full bg-tech-green animate-pulse"></span>
+<span id="streamRateLabel">Live Event Stream: 42 msg/s</span>
+</div>
+</div>
+</div>
+</section>
+<!-- RIGHT CONTEXTUAL INSPECTOR PANEL (340px) -->
+<aside class="w-full lg:w-[340px] shrink-0 bg-paper-surface border border-paper-border rounded-lg p-5 flex flex-col gap-5 shadow-xs">
+<div class="flex items-start justify-between gap-3">
+<div class="min-w-0">
+<span class="font-mono text-[10.5px] uppercase font-semibold text-tech-blue tracking-wider">Contextual Inspector</span>
+<h2 class="text-[17px] font-semibold text-ink mt-0.5 truncate" id="inspectorTitle">Partition P0 (orders.events)</h2>
+</div>
+<span class="px-2 py-0.5 rounded bg-tech-green-light border border-tech-green/30 text-tech-green font-mono text-[11px] font-medium shrink-0">ONLINE</span>
+</div>
+<!-- KEY-VALUE METADATA -->
+<div class="bg-paper-muted border border-paper-border/80 rounded-md p-3.5 flex flex-col gap-2">
+<div class="flex items-center justify-between py-0.5 border-b border-paper-border/60">
+<span class="text-[12px] font-medium text-ink-muted">Leader</span>
+<span class="font-mono text-[12px] font-medium text-ink" id="inspectorLeader">Broker 1</span>
+</div>
+<div class="flex items-center justify-between py-0.5 border-b border-paper-border/60">
+<span class="text-[12px] font-medium text-ink-muted">Replicas</span>
+<span class="font-mono text-[12px] font-medium text-ink">[1, 2, 3]</span>
+</div>
+<div class="flex items-center justify-between py-0.5 border-b border-paper-border/60">
+<span class="text-[12px] font-medium text-ink-muted">ISR</span>
+<span class="font-mono text-[12px] font-semibold text-tech-green">[1, 2, 3]</span>
+</div>
+<div class="flex items-center justify-between py-0.5">
+<span class="text-[12px] font-medium text-ink-muted">High Watermark</span>
+<span class="font-mono text-[12px] font-semibold text-tech-blue" id="inspectorHw">14,208</span>
+</div>
+</div>
+<!-- RECENT RECORDS LIST -->
+<div class="flex flex-col gap-2">
+<div class="flex items-center justify-between">
+<span class="text-[11px] font-semibold text-ink-muted uppercase tracking-wider">Recent Records</span>
+<span class="font-mono text-[11px] text-tech-blue">offset ↓</span>
+</div>
+<div class="flex flex-col gap-1.5" id="recentRecordsList">
+<div class="bg-paper-muted border border-paper-border/80 rounded px-3 py-2 flex items-center justify-between">
+<span class="font-mono text-[11px] font-medium text-tech-blue">#14208</span>
+<span class="font-mono text-[11px] text-ink truncate ml-2">ord_98412 • $129.00</span>
+</div>
+<div class="bg-paper-muted border border-paper-border/80 rounded px-3 py-2 flex items-center justify-between">
+<span class="font-mono text-[11px] font-medium text-tech-blue">#14207</span>
+<span class="font-mono text-[11px] text-ink truncate ml-2">ord_98411 • $48.50</span>
+</div>
+<div class="bg-paper-muted border border-paper-border/80 rounded px-3 py-2 flex items-center justify-between">
+<span class="font-mono text-[11px] font-medium text-tech-blue">#14206</span>
+<span class="font-mono text-[11px] text-ink truncate ml-2">ord_98410 • $310.00</span>
+</div>
+</div>
+</div>
+<!-- EQUIVALENT CLI COMMAND SNIPPET -->
+<div class="flex flex-col gap-1.5 mt-auto">
+<div class="flex items-center justify-between">
+<span class="text-[11px] font-semibold text-ink-muted uppercase tracking-wider">Equivalent CLI</span>
+<button class="font-mono text-[11px] text-tech-blue hover:text-ink font-medium transition-colors" id="copyCliBtn" type="button">Copy</button>
+</div>
+<pre class="bg-paper-muted border border-paper-border rounded p-3 font-mono text-[11.5px] leading-relaxed text-ink overflow-x-auto whitespace-pre-wrap break-all" id="cliSnippet">kafka-topics.sh --describe \
+  --bootstrap-server localhost:9092 \
+  --topic orders.events</pre>
+</div>
+</aside>
+</div>
+<!-- SCRIPT INTERACTIVITY -->
+<script>
+        (function () {
+          var hw = 14208;
+          var sendBtn = document.getElementById('sendMsgBtn');
+          var hwEl = document.getElementById('inspectorHw');
+          var recordsList = document.getElementById('recentRecordsList');
+          var rateLabel = document.getElementById('streamRateLabel');
+          var copyBtn = document.getElementById('copyCliBtn');
+          var cliSnippet = document.getElementById('cliSnippet');
+
+          if (sendBtn && hwEl && recordsList) {
+            sendBtn.addEventListener('click', function () {
+              hw += 1;
+              hwEl.textContent = hw.toLocaleString();
+              var orderId = 'ord_' + (98412 + (hw - 14208));
+              var amount = (Math.random() * 250 + 25).toFixed(2);
+              var row = document.createElement('div');
+              row.className = 'bg-paper-muted border border-paper-border/80 rounded px-3 py-2 flex items-center justify-between';
+              row.innerHTML = '<span class="font-mono text-[11px] font-medium text-tech-green">#' + hw + '</span><span class="font-mono text-[11px] text-ink truncate ml-2">' + orderId + ' • $' + amount + '</span>';
+              recordsList.insertBefore(row, recordsList.firstChild);
+              if (recordsList.children.length > 3) {
+                recordsList.removeChild(recordsList.lastChild);
+              }
+              if (rateLabel) {
+                rateLabel.textContent = 'Live Event Stream: ' + (42 + Math.floor(Math.random() * 8)) + ' msg/s';
+              }
+            });
+          }
+
+          if (copyBtn && cliSnippet) {
+            copyBtn.addEventListener('click', function () {
+              if (navigator.clipboard) {
+                navigator.clipboard.writeText(cliSnippet.textContent);
+              }
+              copyBtn.textContent = 'Copied';
+              setTimeout(function () {
+                copyBtn.textContent = 'Copy';
+              }, 1500);
+            });
+          }
+
+          var partitionNodes = document.querySelectorAll('.partition-node');
+          var inspectorTitle = document.getElementById('inspectorTitle');
+          var inspectorLeader = document.getElementById('inspectorLeader');
+          var leaderMap = { P0: 'Broker 1', P1: 'Broker 2', P2: 'Broker 3' };
+
+          partitionNodes.forEach(function (node) {
+            node.addEventListener('click', function () {
+              var p = node.getAttribute('data-partition');
+              if (inspectorTitle && p) {
+                inspectorTitle.textContent = 'Partition ' + p + ' (orders.events)';
+              }
+              if (inspectorLeader && leaderMap[p]) {
+                inspectorLeader.textContent = leaderMap[p];
+              }
+            });
+          });
+        })();
+      </script>
+</div>
+</main>
+<!-- FOOTER -->
+<footer class="w-full bg-[#FAFAF7] border-t border-paper-border py-2.5 px-5 flex items-center justify-between font-mono text-[11px] text-ink-muted">
+<span>KafkaLab Simulation Engine • KRaft Quorum Mode</span>
+<span>Partition Telemetry Active</span>
+</footer>
+</body></html>
