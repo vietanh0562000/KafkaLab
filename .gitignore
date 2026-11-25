@@ -2,3 +2,4 @@ build/
 .env
 *.out
 .superpowers/
+.playwright-mcp/
